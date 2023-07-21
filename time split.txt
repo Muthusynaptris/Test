@@ -1,0 +1,66 @@
+--Exec USP_Room_Finder_Button_ERF '03/07/2023','03/07/2023','CCM','','','','','','','',''
+
+
+-- select * from [ERF_Data_Set]
+
+--select *,ROW_NUMBER()over(order by [Room Number])as rownum into [ERF_Data_Set1] from [ERF_Data_Set] where [Room Number]='C4.203'
+
+--select * from [ERF_Data_Set1] where [Assign Start Time]='17:00:00.0000000'
+
+
+begin
+declare @initial int
+declare @cnt int
+declare @Starttime time
+declare @Endtime time
+
+set @initial=1
+set @cnt=(select count(*) from [ERF_Data_Set1])
+begin
+while(@initial<=@cnt)
+begin
+set @Starttime=(select [Assign Start Time] from [ERF_Data_Set1] where rownum=@initial)
+set @Endtime=(select [Assign End Time] from [ERF_Data_Set1] where rownum=@initial)
+
+print @initial
+;with CTE AS
+(
+	SELECT  [Room Number],CAST([Assign Start Time] AS Time) AS datum,[Assign End Time] 
+	,(SELECT dateadd(Minute, 15, [Assign Start Time])
+	FROM [ERF_Data_Set1] where rownum=@initial 
+	--[Room Number]='104'
+	and [Assign Start Time] <=[Assign End Time] 
+	)ends
+	from [ERF_Data_Set1] where rownum=@initial
+	--[Room Number]='104'
+	UNION ALL
+	SELECT [Room Number],dateadd(Minute, 15, datum) ,[Assign End Time],(SELECt dateadd(Minute, 15, datum)
+	FROM [ERF_Data_Set1] where rownum=@initial 
+	--[Room Number]='104'
+	and dateadd(Minute, 15, [Assign Start Time]) <= CAST([Assign End Time] AS Time)
+	)ends
+	FROM cte --where [Room Number]='104'
+	where datum <= [Assign End Time]
+	and datum>=@Starttime
+)
+--select * from CTE --option (maxrecursion 0)
+--UNION ALL
+insert into tempa
+select * from (
+select * from
+(
+	SELECT dateadd(Minute, 0, datum)starts ,[Assign End Time],(SELECT dateadd(Minute, 15, datum)
+	FROM [ERF_Data_Set1] where rownum=@initial  
+	--[Room Number]='104'
+	and datum <= [Assign End Time]
+	)ends
+	FROM CTE 
+	WHERE datum <= [Assign End Time]
+	)x where ends<=[Assign End Time] and starts>=@Starttime
+	)a option (maxrecursion 0)
+
+set @initial=@initial+1
+
+end
+end
+end

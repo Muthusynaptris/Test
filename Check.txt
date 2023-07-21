@@ -1,0 +1,116 @@
+with Addproviderdetail as
+(
+select [Created On],[Provider],[Division Name],[Clinic Type],[Clinic Specialty],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Clinic Hours Category],[Location],[Building],[Floor],[Wing],
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number],
+[Originating Process],case when isnull([Room Mandatory],'')='Yes' then 'Yes' when isnull([Room Number],'')!='' then 'Yes' else 'No' end as [Room Mandatory],
+[Suite],[DEP Name],[Mode of Delivery] from [Add_Provider_Clinic] 
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b	
+where [Clinic Date]>getdate()
+),
+Canceldetail as 
+(
+select [Created On],[Clinic Date],[Provider],[Clinic Hours Category],[Location],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Originating Process],
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+from Cancel_Provider_Clinic
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b	
+where [Clinic Date]>getdate()
+),
+Cliniccalendar as 
+(
+select [Provider or Room Only Name],[Clinic Type],[Clinic Specialty],[Originating Process],[Clinic Date],[Clinic Start Time],[Clinic End Time],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+from [VW_Calendar_data]  
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+),
+RADdetail as
+(
+select distinct [Provider],[Originating Process],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Room Number]
+from Room_Assignment_Detail with(nolock) where [Clinic Date] >=getdate()
+and [Division Name] =(select top 1 [Division Name] from Division_Detail)
+),
+RADoveralldetail as 
+(
+select distinct case when isnull([Provider],'')='' then [Clinic Specialty] else [Provider]
+end as [Provider/Specialty],[Originating Process],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Room Number],[Division Name]
+from Room_Assignment_Detail with(nolock) where [Clinic Date] >=getdate()
+and isnull([Division Name],'')! =(select top 1 [Division Name] from Division_Detail)
+),
+ROCdetail as 
+(
+select distinct  [Provider],[Originating Process],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Room Number],Location
+from Room_Occupancy_Details with(nolock) where [Room Status]='Occupied' and [Clinic Date] >=getdate()
+and [Division Name] =(select top 1 [Division Name] from Division_Detail)
+),
+
+select [Created On],[Provider],[Originating Process],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Clinic Hours Category],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+into #Limitdetail
+from Limit_Provider_Schedule with(nolock)
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+and [Provider]=@prov
+Union All
+select [Created On],[Provider],[Originating Process],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Clinic Hours Category],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+from [2_46_Limit Provider Schedule] with(nolock)
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+and [Provider]=@prov
+
+select [Created On],[Provider],[Originating Process],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Clinic Hours Category],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+into #Shortendetail
+from Shorten_Provider_Clinic_Detail with(nolock)
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+and [Provider]=@prov
+
+Union All
+
+select [Created On],[Provider],[Originating Process],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Clinic Hours Category],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+from [2_43_Shorten Provider Clinic] with(nolock)
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+and [Provider]=@prov
+
+
+select [Created On],[Provider],[Originating Process],[Clinic Date],Case when [Edit Clinic]='Edit Clinic'
+	then cast([Clinic Start Time] as time) ELSE	cast([Edit Clinic Start Time] as time)
+	end as [Clinic Start Time],
+	Case when [Edit Clinic]='Edit Clinic'
+	then cast([Clinic End Time] as time) ELSE	cast([Edit Clinic End Time] as time)
+	end as [Clinic End Time],[Clinic Hours Category],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+into #Editdetail from 
+Edit_Provider_Clinic_Specialty with(nolock)
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+and [Provider]=@prov
+
+Union All
+
+select [Created On],[Provider],[Originating Process],[Clinic Date],Case when [Edit Clinic]='Edit Clinic'
+	then cast([Clinic Start Time] as time) ELSE	cast([Edit Clinic Start Time] as time)
+	end as [Clinic Start Time],
+	Case when [Edit Clinic]='Edit Clinic'
+	then cast([Clinic End Time] as time) ELSE	cast([Edit Clinic End Time] as time)
+	end as [Clinic End Time],[Clinic Hours Category],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+from [2_44_Edit Provider Clinic Specialty] with(nolock)
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+and [Provider]=@prov
+

@@ -1,0 +1,477 @@
+Begin
+
+if object_id('tempdb.[dbo].#DetailfromGrid')is not null
+begin
+drop table #DetailfromGrid
+end
+if object_id('tempdb.[dbo].#Calendar_data')is not null
+begin
+drop table #Calendar_data
+end
+if object_id('tempdb.[dbo].#Processdetail')is not null
+begin
+drop table #Processdetail
+end
+if object_id('tempdb.[dbo].#Canceldetail')is not null
+begin
+drop table #Canceldetail
+end
+if object_id('tempdb.[dbo].#Limitdetail')is not null
+begin
+drop table #Limitdetail
+end
+if object_id('tempdb.[dbo].#Shortendetail')is not null
+begin
+drop table #Shortendetail
+end
+if object_id('tempdb.[dbo].#Editdetail')is not null
+begin
+drop table #Editdetail
+end
+if object_id('tempdb.[dbo].#Cliniccalendar')is not null
+begin
+drop table #Cliniccalendar
+end
+if object_id('tempdb.[dbo].#RADdetail')is not null
+begin
+drop table #RADdetail
+end
+if object_id('tempdb.[dbo].#RADoveralldetail')is not null
+begin
+drop table #RADoveralldetail
+end
+if object_id('tempdb.[dbo].#ROCdetail')is not null
+begin
+drop table #ROCdetail
+end
+if object_id('tempdb.[dbo].#Dataset')is not null
+begin
+drop table #Dataset
+end
+if object_id('tempdb.[dbo].#Provider_Regular_Scheduler_Overlaps_Detail')is not null
+begin
+drop table #Provider_Regular_Scheduler_Overlaps_Detail
+end
+
+select [Provider or Room Only Name],[Clinic Type],[Clinic Specialty],[Originating Process],[Clinic Date],[Room Number],
+cast([Clinic Start Time] as time)[Clinic Start Time],cast([Clinic End Time] as time)[Clinic End Time],Location 
+into #Calendar_data from VW_Calendar_data with(nolock) where [Clinic Date] >=getdate()
+and [Provider or Room Only Name]='Data, Provider'
+
+select [Clinic date],cast([Start Time] as time)[Start Time],cast([End Tine] as time)[End Tine],Provider,[Req Provider]
+into #Provider_Regular_Scheduler_Overlaps_Detail from VW_Provider_Regular_Scheduler_Overlaps_Detail with(nolock)
+where [Clinic Date] >=getdate()
+and [req provider]='Data, Provider'
+
+
+select  [Created On],[Created By],[Provider],[Division Name],[Clinic Type],[Clinic Specialty],[Location],[Schedule Start Date],
+		[Schedule End Date],cast([Clinic Date] as date)[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],cast([Clinic End Time] as time)[Clinic End Time],
+		[Work Days],[Clinic Schedule Week],[Clinic Hours Category],[Building],
+		[Floor],(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number],
+		[Originating Process],[Schedule Updated On],[Display in Calendar],
+		(select top 1 x.[Suite] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Suite],[DEP Name],[Mode of Delivery],[Room Mandatory]
+		into #DetailfromGrid
+		from 
+		(
+		select distinct		
+		[Created On],[Created By],[Provider],[Division Name],[Clinic Type],[Clinic Specialty],[Location],[Schedule Start Date],
+		[Schedule End Date],CONVERT(date, Clinic_Date, 103)[Clinic Date],dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, Clinic_Date, 103))) [Clinic Start Time],
+		dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),
+		CONVERT(datetime, Clinic_Date, 103))) [Clinic End Time],[Work Days],[Clinic Schedule Week],[Clinic Hours Category],[Building],[Floor],
+		[Room Name],[Room Number],[Originating Process],[Schedule Updated On],[Display in Calendar],[Suite],[DEP Name],[Mode of Delivery],
+		case when isnull([Room Mandatory],'')='Yes' then 'Yes' when isnull([Room Number],'')!='' then 'Yes' else 'No' end as [Room Mandatory]
+		from Provider_Regular_Schedule_Grid PR with(nolock)
+		left join 
+			( 
+				SELECT   Clinic_Date 
+				FROM [datetable] with(nolock)
+			) DT on 1 = 1 
+		where	CHARINDEX(cast(ceiling(cast(right(CONVERT(Date, DT.Clinic_Date, 103),2)
+				as float)/7.00)as nvarchar(10)),PR.[Clinic Schedule Week])>0 
+		and		CHARINDEX(left(datename(weekday,CONVERT(Date, DT.Clinic_Date, 103)),3),
+				PR.[Work Days])> 0 and dt.Clinic_Date between pr.[Schedule Start Date] and pr.[Schedule End Date]
+				and cast(dt.Clinic_Date as date)>=cast(getdate() as date) and cast([Schedule End Date] as date)>=cast(getdate() as date)
+	and CONVERT(date, Clinic_Date, 103) not in (select  [Clinic date] from #Provider_Regular_Scheduler_Overlaps_Detail h 
+	where h.[req provider]=pr.provider
+	and 	
+	(cast(h.[Start Time] as time) between  cast(pr.[Clinic Start Time] as time) and cast( pr.[Clinic End Time] as time)
+		or   cast(h.[End Tine]  as time) between  cast(pr.[Clinic Start Time] as time) and cast( pr.[Clinic End Time] as time)
+		or cast(pr.[Clinic Start Time]  as time) between  cast(h.[Start Time] as time) and cast( h.[End Tine]  as time)
+		or  cast(pr.[Clinic End Time]  as time) between cast(h.[Start Time] as time) and cast( h.[End Tine]  as time) 
+	)
+		and (cast(pr.[Clinic End Time]  as time)!= cast(h.[Start Time] as time) and  (cast(pr.[Clinic Start Time]  as time)!= cast(h.[End Tine] as time) ))
+				and h.[Clinic date]=CONVERT(date, Clinic_Date, 103)
+	 ) 
+	)a cross apply
+	(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b	
+	where [Provider]='Data, Provider'
+
+	Union All
+
+	select [Created On],[Created By],[Provider],[Division Name],[Clinic Type],[Clinic Specialty],[Location],[Schedule Start Date],
+		[Schedule End Date],cast([Clinic Date] as date)[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],cast([Clinic End Time] as time)[Clinic End Time],
+		[Work Days],[Clinic Schedule Week],[Clinic Hours Category],[Building],[Floor],
+		(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number],[Originating Process],
+		[Schedule Updated On],[Display in Calendar],
+		(select top 1 x.[Suite] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Suite],[DEP Name],[Mode of Delivery],[Room Mandatory]
+		from 
+		(
+		select distinct		
+		[Created On],[Created By],[Provider],[Division Name],[Clinic Type],[Clinic Specialty],[Location],[Schedule Start Date],
+		[Schedule End Date],CONVERT(date, Clinic_Date, 103)[Clinic Date],dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, Clinic_Date, 103))) [Clinic Start Time],
+		dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),
+		CONVERT(datetime, Clinic_Date, 103))) [Clinic End Time],[Work Days],[Clinic Schedule Week],[Clinic Hours Category],[Building],[Floor],
+		[Room Name],[Room Number],[Originating Process],[Schedule Updated On],[Display in Calendar],[Suite],[DEP Name],[Mode of Delivery],
+		case when isnull([Room Mandatory],'')='Yes' then 'Yes' when isnull([Room Number],'')!='' then 'Yes' else 'No' end as [Room Mandatory]
+		from [2_28_Provider Regular Schedule] PR with(nolock)
+		left join 
+			( 
+				SELECT   Clinic_Date 
+				FROM [datetable] with(nolock)
+			) DT on 1 = 1 
+		where	CHARINDEX(cast(ceiling(cast(right(CONVERT(Date, DT.Clinic_Date, 103),2)
+				as float)/7.00)as nvarchar(10)),PR.[Clinic Schedule Week])>0 
+		and		CHARINDEX(left(datename(weekday,CONVERT(Date, DT.Clinic_Date, 103)),3),
+				PR.[Work Days])> 0 and dt.Clinic_Date between pr.[Schedule Start Date] and pr.[Schedule End Date]
+				and cast(dt.Clinic_Date as date)>=cast(getdate() as date) and cast([Schedule End Date] as date)>=cast(getdate() as date)
+	and CONVERT(date, Clinic_Date, 103) not in (select  [Clinic date] from #Provider_Regular_Scheduler_Overlaps_Detail h 
+	where h.[req provider]=pr.provider
+	and 	
+	(cast(h.[Start Time] as time) between  cast(pr.[Clinic Start Time] as time) and cast( pr.[Clinic End Time] as time)
+		or   cast(h.[End Tine]  as time) between  cast(pr.[Clinic Start Time] as time) and cast( pr.[Clinic End Time] as time)
+		or cast(pr.[Clinic Start Time]  as time) between  cast(h.[Start Time] as time) and cast( h.[End Tine]  as time)
+		or  cast(pr.[Clinic End Time]  as time) between cast(h.[Start Time] as time) and cast( h.[End Tine]  as time) 
+	)
+		and (cast(pr.[Clinic End Time]  as time)!= cast(h.[Start Time] as time) and  (cast(pr.[Clinic Start Time]  as time)!= cast(h.[End Tine] as time) ))
+				and h.[Clinic date]=CONVERT(date, Clinic_Date, 103)
+	 ) 
+	)a cross apply
+	(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b		
+	where [Provider]='Data, Provider'
+
+	--select * from #DetailfromGrid where [Room Number]='302' and [Clinic Date]='2/2/2024'
+
+select  distinct [Created On],[Created By],[Provider],[Division Name],[Clinic Type],[Clinic Specialty],[Location],[Schedule Start Date],
+		[Schedule End Date],cast([Clinic Date] as date)[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],cast([Clinic End Time] as time)[Clinic End Time],
+		[Work Days],[Clinic Schedule Week],[Clinic Hours Category],[Building],[Floor],
+		(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number],
+		[Originating Process],[Schedule Updated On],[Display in Calendar],
+		(select top 1 x.[Suite] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Suite],[DEP Name],[Mode of Delivery],
+		case when isnull([Room Mandatory],'')='Yes' then 'Yes' when isnull([Room Number],'')!='' then 'Yes' else 'No' end as [Room Mandatory]
+		into #Processdetail
+		from Provider_Regular_Schedule_Detail with(nolock)
+		cross apply
+	    (select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b
+		where [Clinic Date] >=getdate() and [Provider]='Data, Provider'
+
+Union All
+
+select  [Created On],[Created By],[Provider],[Division Name],[Clinic Type],[Clinic Specialty],[Location],[Schedule Start Date],
+		[Schedule End Date],cast([Clinic Date] as date)[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],cast([Clinic End Time] as time)[Clinic End Time],
+		[Work Days],[Clinic Schedule Week],[Clinic Hours Category],[Building],[Floor],
+		(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number],[Originating Process],
+		[Schedule Updated On],[Display in Calendar],
+		(select top 1 x.[Suite] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Suite],[DEP Name],[Mode of Delivery],[Room Mandatory]
+		from 
+		(
+		select distinct		
+		[Created On],[Created By],[Provider],[Division Name],[Clinic Type],[Clinic Specialty],[Location],[Schedule Start Date],
+		[Schedule End Date],CONVERT(date, Clinic_Date, 103)[Clinic Date],dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, Clinic_Date, 103))) [Clinic Start Time],
+		dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),
+		CONVERT(datetime, Clinic_Date, 103))) [Clinic End Time],[Work Days],[Clinic Schedule Week],[Clinic Hours Category],[Building],[Floor],
+		[Room Name],[Room Number],[Originating Process],[Schedule Updated On],[Display in Calendar],[Suite],[DEP Name],[Mode of Delivery],
+		case when isnull([Room Mandatory],'')='Yes' then 'Yes' when isnull([Room Number],'')!='' then 'Yes' else 'No' end as [Room Mandatory]
+		from [2_28_Provider Regular Schedule] PR with(nolock)
+		left join 
+			( 
+				SELECT   Clinic_Date 
+				FROM [datetable]
+			) DT on 1 = 1 
+		where	CHARINDEX(cast(ceiling(cast(right(CONVERT(Date, DT.Clinic_Date, 103),2)
+				as float)/7.00)as nvarchar(10)),PR.[Clinic Schedule Week])>0 
+		and		CHARINDEX(left(datename(weekday,CONVERT(Date, DT.Clinic_Date, 103)),3),
+				PR.[Work Days])> 0 and dt.Clinic_Date between pr.[Schedule Start Date] and pr.[Schedule End Date]
+				and cast(dt.Clinic_Date as date)>=cast(getdate() as date) and cast([Schedule End Date] as date)>=cast(getdate() as date)
+	and CONVERT(date, Clinic_Date, 103) not in (select  [Clinic date] from #Provider_Regular_Scheduler_Overlaps_Detail h 
+	where h.[req provider]=pr.provider
+	and 	
+	(cast(h.[Start Time] as time) between  cast(pr.[Clinic Start Time] as time) and cast( pr.[Clinic End Time] as time)
+		or   cast(h.[End Tine]  as time) between  cast(pr.[Clinic Start Time] as time) and cast( pr.[Clinic End Time] as time)
+		or cast(pr.[Clinic Start Time]  as time) between  cast(h.[Start Time] as time) and cast( h.[End Tine]  as time)
+		or  cast(pr.[Clinic End Time]  as time) between cast(h.[Start Time] as time) and cast( h.[End Tine]  as time) 
+	)
+		and (cast(pr.[Clinic End Time]  as time)!= cast(h.[Start Time] as time) and  (cast(pr.[Clinic Start Time]  as time)!= cast(h.[End Tine] as time) ))
+				and h.[Clinic date]=CONVERT(date, Clinic_Date, 103)
+	 ) 
+	)a cross apply
+	(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b		
+	where [Provider]='Data, Provider'
+
+	--select * from #Processdetail where [Room Number]='302' and [Clinic Date]='2/2/2024'
+
+
+select [Created On],[Provider],[Originating Process],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Clinic Hours Category],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+into #Canceldetail
+from Cancel_Provider_Clinic with(nolock)
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+and [Provider]='Data, Provider'
+
+select [Created On],[Provider],[Originating Process],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Clinic Hours Category],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+into #Limitdetail
+from Limit_Provider_Schedule with(nolock)
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+and [Provider]='Data, Provider'
+Union All
+select [Created On],[Provider],[Originating Process],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Clinic Hours Category],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+from [2_46_Limit Provider Schedule] with(nolock)
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+and [Provider]='Data, Provider'
+
+select [Created On],[Provider],[Originating Process],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Clinic Hours Category],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+into #Shortendetail
+from Shorten_Provider_Clinic_Detail with(nolock)
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+and [Provider]='Data, Provider'
+
+Union All
+
+select [Created On],[Provider],[Originating Process],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Clinic Hours Category],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+from [2_43_Shorten Provider Clinic] with(nolock)
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+and [Provider]='Data, Provider'
+
+
+select [Created On],[Provider],[Originating Process],[Clinic Date],Case when [Edit Clinic]='Edit Clinic'
+	then cast([Clinic Start Time] as time) ELSE	cast([Edit Clinic Start Time] as time)
+	end as [Clinic Start Time],
+	Case when [Edit Clinic]='Edit Clinic'
+	then cast([Clinic End Time] as time) ELSE	cast([Edit Clinic End Time] as time)
+	end as [Clinic End Time],[Clinic Hours Category],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+into #Editdetail from 
+Edit_Provider_Clinic_Specialty with(nolock)
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+and [Provider]='Data, Provider'
+
+Union All
+
+select [Created On],[Provider],[Originating Process],[Clinic Date],Case when [Edit Clinic]='Edit Clinic'
+	then cast([Clinic Start Time] as time) ELSE	cast([Edit Clinic Start Time] as time)
+	end as [Clinic Start Time],
+	Case when [Edit Clinic]='Edit Clinic'
+	then cast([Clinic End Time] as time) ELSE	cast([Edit Clinic End Time] as time)
+	end as [Clinic End Time],[Clinic Hours Category],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+from [2_44_Edit Provider Clinic Specialty] with(nolock)
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+and [Provider]='Data, Provider'
+
+
+select [Provider or Room Only Name],[Clinic Type],[Clinic Specialty],[Originating Process],[Clinic Date],[Clinic Start Time],[Clinic End Time],Location,
+(select top 1 x.[Room Name] from [Erd_Room_Master] x where x.[Room Number]=[splitdata])[Room Name],b.[splitdata][Room Number]
+into #Cliniccalendar from #Calendar_data  
+cross apply
+(select * from [dbo].[fnSplitString](isnull([Room Number],'No Room'),';'))b where [Clinic Date] >=getdate()
+and [Provider or Room Only Name]='Data, Provider'
+
+select distinct [Provider],[Originating Process],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Room Number]
+into #RADdetail from Room_Assignment_Detail with(nolock) where [Clinic Date] >=getdate()
+and [Division Name] =(select top 1 [Division Name] from Division_Detail)
+
+select distinct case when isnull([Provider],'')='' then [Clinic Specialty] else [Provider]
+end as [Provider/Specialty],[Originating Process],[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Room Number],[Division Name]
+into #RADoveralldetail
+from Room_Assignment_Detail with(nolock) where [Clinic Date] >=getdate()
+and isnull([Division Name],'')! =(select top 1 [Division Name] from Division_Detail)
+ 
+select distinct  [Provider],[Originating Process],cast([Clinic Date] as date)[Clinic Date],cast([Clinic Start Time] as time)[Clinic Start Time],
+cast([Clinic End Time] as time)[Clinic End Time],[Room Number],Location
+into #ROCdetail
+from Room_Occupancy_Details with(nolock) where [Room Status]='Occupied' and [Clinic Date] >=getdate()
+and [Division Name] =(select top 1 [Division Name] from Division_Detail)
+
+--select * from #ROCdetail where [Room Number]='302' and [Clinic Date]='2/2/2024'
+
+alter table #DetailfromGrid alter column [Room Number] nvarchar(250)
+alter table #Processdetail alter column [Room Number] nvarchar(250)
+alter table #Canceldetail alter column [Room Number] nvarchar(250)
+alter table #Limitdetail alter column [Room Number] nvarchar(250)
+alter table #Shortendetail alter column [Room Number] nvarchar(250)
+alter table #Editdetail alter column [Room Number] nvarchar(250)
+alter table #Cliniccalendar alter column [Room Number] nvarchar(250)
+alter table #RADdetail alter column [Room Number] nvarchar(250)
+alter table #RADoveralldetail alter column [Room Number] nvarchar(250)
+alter table #ROCdetail alter column [Room Number] nvarchar(250)
+alter table #Provider_Regular_Scheduler_Overlaps_Detail alter column [Req Provider] nvarchar(250)
+
+Create nonclustered index idx1 on #DetailfromGrid([Clinic Date],[Room Number],[Provider],[Clinic Start Time],[Clinic End Time])
+Create nonclustered index idx2 on #Processdetail([Clinic Date],[Room Number],[Provider],[Clinic Start Time],[Clinic End Time])
+Create nonclustered index idx3 on #Canceldetail([Clinic Date],[Room Number],[Provider],[Clinic Start Time],[Clinic End Time])
+Create nonclustered index idx4 on #Limitdetail([Clinic Date],[Room Number],[Provider],[Clinic Start Time],[Clinic End Time])
+Create nonclustered index idx5 on #Shortendetail([Clinic Date],[Room Number],[Provider],[Clinic Start Time],[Clinic End Time])
+Create nonclustered index idx6 on #Editdetail([Clinic Date],[Room Number],[Provider],[Clinic Start Time],[Clinic End Time])
+Create nonclustered index idx7 on #Cliniccalendar([Clinic Date],[Room Number],[Provider or Room Only Name],[Clinic Start Time],[Clinic End Time])
+Create nonclustered index idx8 on #RADdetail([Clinic Date],[Room Number],[Provider],[Clinic Start Time],[Clinic End Time])
+Create nonclustered index idx9 on #RADoveralldetail([Clinic Date],[Room Number],[Clinic Start Time],[Clinic End Time])
+Create nonclustered index idx10 on #ROCdetail([Clinic Date],[Room Number],[Provider],[Clinic Start Time],[Clinic End Time])
+Create nonclustered index idx11 on #Provider_Regular_Scheduler_Overlaps_Detail([Clinic Date],[Req Provider],[Start Time],[End Tine])
+
+--select * from #Dataset where [Clinic Date]='02/02/2024' and [Room Number]='302'
+
+select z.*,case when isnull(z.[clinic date],'')='' then 'No' else 'Yes' end 'Grid Detail'
+ ,case when isnull(a.[clinic date],'')='' then 'No' else 'Yes' end 'PRS Detail'
+ ,case when isnull(b.[clinic date],'')='' then 'No' else 'Yes' end 'Division Calendar'
+ ,case when isnull(c.[clinic date],'')='' then 'No' else 'Yes' end 'Cancel Status'
+ ,case when isnull(d.[clinic date],'')='' then 'No' else 'Yes' end 'RAD'
+ ,case when isnull(e.[clinic date],'')='' then 'No' else 'Yes' end 'ROC'
+ ,case when isnull(h.[clinic date],'')='' then 'No' else h.[Originating Process] end  'Calendar Display Org'
+ ,case when isnull(j.[clinic date],'')='' then 'No' else 'Yes' end 'Overlap Status'
+ ,case when isnull(x.[clinic date],'')='' then 'No' else 'Yes' end 'Other Division Overlap Status'
+ ,case when isnull(x.[clinic date],'')='' then 'No' else x.[Provider/Specialty] end 'Overlap Provider/Specialty'
+ ,case when isnull(x.[clinic date],'')='' then 'No' else x.[Division Name] end 'Overlap Division'
+ ,case when isnull(x.[clinic date],'')='' then 'No' else x.[Originating Process] end 'Overlap Originating Process'
+ ,case when isnull(o.[clinic date],'')='' then 'No' else 'Yes' end '20 percent from view'
+ ,case when isnull(p.[date],'')='' then 'No' else 'Yes' end '20 percent from table'
+ ,case when isnull(q.[Clinic date],'')='' then 'No' else 'Yes' end 'Limit Status'
+ ,case when isnull(r.[Clinic date],'')='' then 'No' else 'Yes' end 'Shorten Status'
+ ,case when isnull(s.[Clinic date],'')='' then 'No' else 'Yes' end 'Edit Status'
+ ,case when isnull(y.[Clinic date],'')='' then 'No' else y.[Originating Process] end 'RAD Display'
+ into #Dataset
+ from 
+ #DetailfromGrid z left join #Processdetail a  
+on a.[Clinic Date] =z.[Clinic Date] and a.[Clinic Start Time] = z.[Clinic Start Time]
+and a.[Clinic End Time] =z.[Clinic End Time] 
+and a.Provider=z.[Provider]  left join #Cliniccalendar b
+on a.[Clinic Date] =b.[Clinic Date] 
+and a.[Clinic Start Time] = b.[Clinic Start Time]
+and a.[Clinic End Time] =b.[Clinic End Time] 
+and a.Provider=b.[Provider or Room Only Name]
+and (a.[Originating Process]=b.[Originating Process] or b.[Originating Process]='Provider Regular Schedule Inprogress')
+left join #Canceldetail c
+on a.[Clinic Date] =c.[Clinic Date] 
+and 
+((a.[Clinic Start Time] = c.[Clinic Start Time]
+and a.[Clinic End Time] =c.[Clinic End Time] )
+or
+a.[Clinic Hours Category]=c.[Clinic Hours Category])
+and a.Provider=c.[Provider]
+and A.[Created On]<C.[Created On]
+left join #Limitdetail q on a.[Clinic Date] =q.[Clinic Date] 
+and a.[Clinic Start Time] = q.[Clinic Start Time]
+and a.[Clinic End Time] =q.[Clinic End Time] 
+and a.[Room Number]=q.[Room Number]
+and a.Provider=q.[Provider]
+left join #Shortendetail r on a.[Clinic Date] =r.[Clinic Date] 
+and (a.[Clinic Start Time]  between r.[Clinic Start Time]  and r.[Clinic End Time] 
+	or a.[Clinic End Time]  between r.[Clinic Start Time]  and r.[Clinic End Time] 
+	or r.[Clinic Start Time]  between a.[Clinic Start Time]  and a.[Clinic End Time] 
+	or r.[Clinic End Time]  between a.[Clinic Start Time]  and a.[Clinic End Time] 
+	or ((a.[Clinic Start Time] =r.[Clinic Start Time] 
+	and a.[Clinic End Time] =r.[Clinic End Time]  )) 
+	and (r.[Clinic End Time]  != a.[Clinic Start Time]  
+	and  (r.[Clinic Start Time]  != a.[Clinic End Time] 
+)))
+and a.[Room Number]=r.[Room Number]
+and a.Provider=r.[Provider]
+left join #Editdetail s on a.[Clinic Date] =s.[Clinic Date] 
+and (a.[Clinic Start Time]  between s.[Clinic Start Time]  and s.[Clinic End Time] 
+	or a.[Clinic End Time]  between s.[Clinic Start Time]  and s.[Clinic End Time] 
+	or s.[Clinic Start Time]  between a.[Clinic Start Time]  and a.[Clinic End Time] 
+	or s.[Clinic End Time]  between a.[Clinic Start Time]  and a.[Clinic End Time] 
+	or ((a.[Clinic Start Time] =s.[Clinic Start Time] 
+	and a.[Clinic End Time] =s.[Clinic End Time]  )) 
+	and (s.[Clinic End Time]  != a.[Clinic Start Time]  
+	and  (s.[Clinic Start Time]  != a.[Clinic End Time] 
+)))
+and a.[Room Number]=r.[Room Number]
+and a.Provider=r.[Provider]
+left join #RADdetail d
+on a.[Clinic Date] =d.[Clinic Date]  and a.[Clinic Start Time] = d.[Clinic Start Time]
+and a.[Clinic End Time] =d.[Clinic End Time]  and a.Provider=d.[Provider]
+and a.[Room Number]=d.[Room Number]
+and d.[Originating Process] in('Provider Regular Schedule Inprogress','Provider Regular Schedule')
+left join #ROCdetail e 
+on a.[Clinic Date] =e.[Clinic Date]  and a.[Clinic Start Time] = e.[Clinic Start Time]
+and a.[Clinic End Time] =e.[Clinic End Time]  and a.Provider=e.[Provider]
+and a.[Room Number]=e.[Room Number]
+and e.[Originating Process] in('Provider Regular Schedule Inprogress','Provider Regular Schedule')
+left join #Cliniccalendar h 
+on a.[Clinic Date] =h.[Clinic Date] 
+and (a.[Clinic Start Time]  between h.[Clinic Start Time]  and h.[Clinic End Time] 
+	or a.[Clinic End Time]  between h.[Clinic Start Time]  and h.[Clinic End Time] 
+	or h.[Clinic Start Time]  between a.[Clinic Start Time]  and a.[Clinic End Time] 
+	or h.[Clinic End Time]  between a.[Clinic Start Time]  and a.[Clinic End Time] 
+	or ((a.[Clinic Start Time] =h.[Clinic Start Time] 
+	and a.[Clinic End Time] =h.[Clinic End Time]  )) 
+	and (h.[Clinic End Time]  != a.[Clinic Start Time]  
+	and  (h.[Clinic Start Time]  != a.[Clinic End Time] 
+)))
+ and a.Provider=h.[Provider or Room Only Name]
+ and a.[Originating Process]!=h.[Originating Process]
+ left join #Provider_Regular_Scheduler_Overlaps_Detail o on a.provider=o.[Req Provider] and a.[Clinic Date]=o.[Clinic Date]
+ left join [Room_Finder_Schedule_dataset_Rooms_Percentage] p on a.provider=p.[Request Provider] and a.[Clinic Date]=p.[Date]
+ and (isnull(p.[Rooms Percentage],0)>0 and isnull(p.[Rooms Percentage],0)<=20) and a.[Room Number]=p.[Room Number]
+ left join #RADdetail j on a.[Clinic Date]=j.[Clinic Date]
+ and (a.[Clinic Start Time]  between j.[Clinic Start Time]  and j.[Clinic End Time] 
+	or a.[Clinic End Time]  between j.[Clinic Start Time]  and j.[Clinic End Time] 
+	or j.[Clinic Start Time]  between a.[Clinic Start Time]  and a.[Clinic End Time] 
+	or j.[Clinic End Time]  between a.[Clinic Start Time]  and a.[Clinic End Time] 
+	or ((a.[Clinic Start Time] =j.[Clinic Start Time] 
+	and a.[Clinic End Time] =j.[Clinic End Time]  )) 
+	and (j.[Clinic End Time]  != a.[Clinic Start Time]  
+	and  (j.[Clinic Start Time]  != a.[Clinic End Time] 
+ )))
+	and a.[Room Number]=j.[Room Number]
+	and isnull(a.[Provider],'')!=isnull(j.[Provider],'')
+	left join #RADoveralldetail x on a.[Clinic Date]=x.[Clinic Date]
+ and (a.[Clinic Start Time] between x.[Clinic Start Time] and x.[Clinic End Time]
+	or a.[Clinic End Time] between x.[Clinic Start Time] and x.[Clinic End Time]
+	or x.[Clinic Start Time] between a.[Clinic Start Time] and a.[Clinic End Time]
+	or x.[Clinic End Time] between a.[Clinic Start Time] and a.[Clinic End Time]
+	or ((a.[Clinic Start Time]=x.[Clinic Start Time]
+	and a.[Clinic End Time]=x.[Clinic End Time] )) 
+	and (x.[Clinic End Time] != a.[Clinic Start Time] 
+	and  (x.[Clinic Start Time] != a.[Clinic End Time]
+ )))
+	and a.[Room Number]=x.[Room Number]
+left join #RADdetail y on a.[Clinic Date]=y.[Clinic Date]
+ and (a.[Clinic Start Time] between y.[Clinic Start Time] and y.[Clinic End Time]
+	or a.[Clinic End Time] between y.[Clinic Start Time] and y.[Clinic End Time]
+	or y.[Clinic Start Time] between a.[Clinic Start Time] and a.[Clinic End Time]
+	or y.[Clinic End Time] between a.[Clinic Start Time] and a.[Clinic End Time]
+	or ((a.[Clinic Start Time]=y.[Clinic Start Time]
+	and a.[Clinic End Time]=y.[Clinic End Time] )) 
+	and (y.[Clinic End Time] != a.[Clinic Start Time] 
+	and  (y.[Clinic Start Time] != a.[Clinic End Time]
+ )))
+	and a.[Room Number]=y.[Room Number]
+	and isnull(a.[Provider],'')=isnull(y.[Provider],'')
+	and y.[Originating Process] in('Shorten Provider Clinic Inprogress','Shorten Provider Clinic','Provider Regular Schedule'
+	,'Edit Provider Clinic','Edit Provider Clinic Inprogress','Limit Provider Schedule','Limit Provider Schedule Inprogress')
+
+select * from
+(
+select * from #dataset where [Clinic Date]='02/02/2024' and [Room Number]='302'
+)a
+End
+
+

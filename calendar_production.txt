@@ -1,0 +1,2586 @@
+USE [V3_Neurology]
+GO
+/****** Object:  StoredProcedure [dbo].[USP_Insert_Clinic_Calendar]    Script Date: 1/21/2023 1:17:13 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+ALTER PROCEDURE [dbo].[USP_Insert_Clinic_Calendar]
+(
+--declare
+
+@startdate date, 
+@enddate date, 
+@Provider nvarchar(150),
+@ClinicType nvarchar(50),
+@ClinicSpecialty nvarchar(50),
+@CreatedOn datetime,
+@originatingprocess varchar(250)
+)
+as
+
+Begin
+
+	--******************************************************************
+	-- The below block used to Store the calendar History data
+	--******************************************************************
+
+	-----Add Provider---------------
+	if @originatingprocess='Add Provider Clinic'
+	 begin
+		Begin
+ 			 set @startdate= (select min([Clinic Date]) as [Clinic Date] 
+			 from [dbo].[2_36_Add Provider Clinic] 
+			 where [Created On]=@Createdon 
+			 and [Provider]=@Provider)
+		 End 
+	 
+		 if(isnull(@startdate,'')='')
+		 begin
+			 set @startdate= (select min([Clinic Date]) as [Clinic Date] 
+			 from [Add_Provider_Clinic] 
+			 where [Created On]=@Createdon 
+			 and [Provider]=@Provider 
+			 and isnull(@startdate,'')='')
+		 end
+
+		 Begin
+ 			 set @enddate= (select max([Clinic Date]) as [Clinic Date] 
+			 from [dbo].[2_36_Add Provider Clinic] 
+			 where [Created On]=@Createdon 
+			 and [Provider]=@Provider)
+		 End 
+	 
+		 if(isnull(@enddate,'')='')
+		 begin
+			 set @enddate= (select max([Clinic Date]) as [Clinic Date] 
+			 from [Add_Provider_Clinic] 
+			 where [Created On]=@Createdon 
+			 and [Provider]=@Provider 
+			 and isnull(@enddate,'')='')
+		 end
+ end
+---------------
+
+	-----Add Clinic---------------
+	if @originatingprocess='Add Clinic'
+	 begin
+		Begin
+ 			 set @startdate= (select min([Clinic Date]) as [Clinic Date] 
+			 from [dbo].[2_48_Add Clinic] 
+			 where [Created On]=@Createdon 
+			 and [Clinic Type]=@ClinicType 
+		and [Clinic Specialty]=@ClinicSpecialty)
+		 End 
+	 
+		 if(isnull(@startdate,'')='')
+		 begin
+			 set @startdate= (select min([Clinic Date]) as [Clinic Date] 
+			 from [Add_Clinic] 
+			 where [Created On]=@Createdon 
+			 and [Clinic Type]=@ClinicType 
+		 and [Clinic Specialty]=@ClinicSpecialty 
+			 and isnull(@startdate,'')='')
+		 end
+
+		 Begin
+ 			 set @enddate= (select max([Clinic Date]) as [Clinic Date] 
+			 from [dbo].[2_48_Add Clinic] 
+			 where [Created On]=@Createdon 
+			 and [Clinic Type]=@ClinicType 
+		 and [Clinic Specialty]=@ClinicSpecialty)
+		 End 
+	 
+		 if(isnull(@enddate,'')='')
+		 begin
+			 set @enddate= (select max([Clinic Date]) as [Clinic Date] 
+			 from [Add_Clinic] 
+			 where [Created On]=@Createdon 
+			 and [Clinic Type]=@ClinicType 
+		 and [Clinic Specialty]=@ClinicSpecialty 
+			 and isnull(@enddate,'')='')
+		 end
+ end
+---------------
+
+-----Room Only Add---------------
+	if @originatingprocess='Add Room Only Schedule'
+	 begin
+		Begin
+ 			 set @startdate= (select min([Clinic Date]) as [Clinic Date] 
+			 from [dbo].[2_66_Add Room Only Schedule] 
+			 where [Created On]=@Createdon 
+			 and [Room Only Schedule Provider]=@Provider)
+		 End 
+	 
+		 if(isnull(@startdate,'')='')
+		 begin
+			 set @startdate= (select min([Clinic Date]) as [Clinic Date] 
+			 from [Add_Room_Only_Schedule] 
+			 where [Created On]=@Createdon 
+			 and [Room Only Schedule Provider]=@Provider 
+			 and isnull(@startdate,'')='')
+		 end
+
+		 Begin
+ 			 set @enddate= (select max([Clinic Date]) as [Clinic Date] 
+			 from [dbo].[2_66_Add Room Only Schedule] 
+			 where [Created On]=@Createdon 
+			 and [Room Only Schedule Provider]=@Provider)
+		 End 
+	 
+		 if(isnull(@enddate,'')='')
+		 begin
+			 set @enddate= (select max([Clinic Date]) as [Clinic Date] 
+			 from [Add_Room_Only_Schedule] 
+			 where [Created On]=@Createdon 
+			 and [Room Only Schedule Provider]=@Provider 
+			 and isnull(@enddate,'')='')
+		 end
+ end
+--------------- Move the data to Clinic Calendar History Table ----------
+
+
+	begin 
+		Insert into [Clinic_Calendar_History] 
+		select * from [Clinic_Calendar] 
+		where [Clinic Date] between @startdate and @enddate 
+		and provider=@Provider 
+		and [Created On]=@CreatedOn 
+		and [Originating Process]=@originatingprocess;
+	end
+
+	begin 
+		Insert into [Clinic_Calendar_History] 
+		select * from [Clinic_Calendar] 
+		where [Clinic Date] between @startdate and @enddate 
+		and Isnull(provider,'')=''
+		and [Clinic Type]=@ClinicType 
+		and [Clinic Specialty]=@ClinicSpecialty
+		and [Created On]=@CreatedOn 
+		and [Originating Process]=@originatingprocess;
+	end
+
+	--******************************************************************
+	-- The below block deletes the calendar incase if it is a update
+	--******************************************************************
+	begin 
+	delete from [Clinic_Calendar] where [Clinic Date] between @startdate and @enddate and provider=@Provider 
+	and Isnull(provider,'')!=''
+	and [Created On]=@CreatedOn and [Originating Process]=@originatingprocess;
+	end
+	begin 
+	delete from [dbo].[ERD_Enterprise_Schedule_Data] where [Clinic Date] between @startdate and @enddate and provider=@Provider 
+	and [Created On]=@CreatedOn and [Originating Process]=@originatingprocess;
+	end
+	
+	begin 
+	delete from [Clinic_Calendar] where [Clinic Date] between @startdate and @enddate and [Clinic Type]=@ClinicType 
+	and [Clinic Specialty]=@ClinicSpecialty and [Created On]=@CreatedOn and [Originating Process]=@originatingprocess;
+	end
+	begin 
+	delete from [dbo].[ERD_Enterprise_Schedule_Data] where [Clinic Date] between @startdate and @enddate and [Clinic Type]=@ClinicType 
+	and [Clinic Specialty]=@ClinicSpecialty and [Created On]=@CreatedOn and [Originating Process]=@originatingprocess;
+	end
+
+
+	--******************************************************************
+	-- The below block inserts into the calendar for Regular Schedule
+	--******************************************************************
+	if @originatingprocess = 'Provider Regular Schedule'
+
+Begin
+	begin
+
+	Delete a from
+	(
+	select *,datename(dw,[Clinic Date])[Work Days],ceiling(cast(datepart(day,[Clinic Date])/7.00 as float))[Clinic Schedule Week],
+	isnull ((select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		where (cast(a.[Clinic Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		and cast([Start Time Maximum Value] as time)
+		and cast(a.[Clinic End Time] as time) BETWEEN cast([End Time Minimum Value] as time)
+		and cast([End Time Maximum Value] as time))),'All Day') [Clinic Hours Category]	
+	from [Clinic_Calendar] a where a.[Provider]=@Provider and [Originating Process]='Cancel Provider Clinic'
+	)a where not exists
+	(
+	select '' from (
+	select [Provider],[Clinic Date],[Location],[Clinic Hours Category] from [Provider_Regular_Schedule_Detail] 
+	Union 
+	select [Provider],[Clinic Date],[Location],[Clinic Hours Category] from [Add_Provider_Clinic]
+	)b
+	where a.[Location]=b.[Location]
+	and a.[Provider]=b.[Provider]
+	and a.[Clinic Hours Category]=b.[Clinic Hours Category]
+	and a.[Clinic Date]=b.[Clinic Date]
+	and b.[Provider]=@Provider  
+	)
+End
+
+	begin
+	
+	delete from [Clinic_Calendar] where [Clinic Date] between @startdate and @enddate and
+	provider=@Provider 
+	--and [Created On]=@CreatedOn 
+	and [Originating Process] in ('Provider Regular Schedule','Provider Regular Schedule Inprogress');
+	end
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Provider_Regular_Schedule_Detail] a
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	provider=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+			 and not exists
+		(select * from (
+		select [Provider],[Clinic Date],[Clinic Start Time],[Clinic End Time],[Location],[Clinic Hours Category]
+		FROM  
+		( select [Provider],[Clinic Date],[Clinic Start Time],[Clinic End Time],[Location],[Clinic Hours Category] from Cancel_Provider_Clinic
+		UNION
+		SELECT [Provider],[Clinic Date],[Clinic Start Time],[Clinic End Time],[Location],[Clinic Hours Category] FROM Convert_Provider_Clinic )  A  --where [Cancel Confirmation]='Yes'
+		)CPC where a.[Clinic date]=CPC.[Clinic date] and a.[provider]=CPC.[provider]
+		 --and a.[Location]=CPC.[Location]
+			and 
+	
+	(cast(cpc.[Clinic Start Time] as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time] as time)
+		or   cast(cpc.[Clinic End Time]  as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time] as time)
+		or cast(a.[Clinic Start Time]  as time) between  cast(cpc.[Clinic Start Time] as time) and cast( cpc.[Clinic End Time]  as time)
+		or  cast(a.[Clinic End Time]  as time) between cast(cpc.[Clinic Start Time] as time) and cast( cpc.[Clinic End Time]  as time) 
+		--			or 
+		--			(select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		--where (cast(a.[Clinic Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		--and cast([Start Time Maximum Value] as time)
+		--and cast(a.[Clinic End Time] as time) BETWEEN cast([End Time Minimum Value] as time)
+		-- and cast([End Time Maximum Value] as time)))='All Day'
+		)
+		and (cast(a.[Clinic End Time]  as time)!= cast(cpc.[Clinic Start Time] as time) and  (cast(a.[Clinic Start Time]  as time)!= cast(cpc.[Clinic End Time] as time) ))
+				and cpc.[Clinic date]=a.[Clinic Date]
+		)
+	end 
+end
+
+	--if @originatingprocess = 'Provider Regular Schedule'
+/*
+	Begin
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [Provider_Regular_Schedule_Detail]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	provider=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+*/
+
+/*
+
+		if @originatingprocess = 'Provider Regular Schedule Inprogress'
+
+	Begin
+	
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM Provider_Regular_Schedule_Inprogress_Detail
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	provider=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+
+	end
+	*/
+	if @originatingprocess = 'Provider Regular Schedule Inprogress'
+
+	Begin
+		insert into [CLinic_Calendar] ([Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time], [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],[Employee Login ID], [Linked Clinic Name],
+					 [RowID], [Legends],[Color code] , [Userid],
+					 [CalendarOrder], [Display in Calendar],[Room Number],[Suite],[Mode of Delivery])
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[Room Number],[Suite],[Mode of Delivery]
+			 FROM Provider_Regular_Schedule_Inprogress_Detail a
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	provider=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+			 and not exists
+		(select * from (
+		select [Provider],[Clinic Date],[Clinic Start Time],[Clinic End Time],[Location],[Clinic Hours Category]
+		FROM  
+		( select [Provider],[Clinic Date],[Clinic Start Time],[Clinic End Time],[Location],[Clinic Hours Category] from Cancel_Provider_Clinic
+		UNION
+		SELECT [Provider],[Clinic Date],[Clinic Start Time],[Clinic End Time],[Location],[Clinic Hours Category] FROM Convert_Provider_Clinic )  A  --where [Cancel Confirmation]='Yes'
+		)CPC where a.[Clinic date]=CPC.[Clinic date] and a.[provider]=CPC.[provider]
+		 --and a.[Location]=CPC.[Location]
+			and 
+	
+	(cast(cpc.[Clinic Start Time] as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time] as time)
+		or   cast(cpc.[Clinic End Time]  as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time] as time)
+		or cast(a.[Clinic Start Time]  as time) between  cast(cpc.[Clinic Start Time] as time) and cast( cpc.[Clinic End Time]  as time)
+		or  cast(a.[Clinic End Time]  as time) between cast(cpc.[Clinic Start Time] as time) and cast( cpc.[Clinic End Time]  as time) 
+		--			or 
+		--			(select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		--where (cast(a.[Clinic Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		--and cast([Start Time Maximum Value] as time)
+		--and cast(a.[Clinic End Time] as time) BETWEEN cast([End Time Minimum Value] as time)
+		-- and cast([End Time Maximum Value] as time)))='All Day'
+		)
+		and (cast(a.[Clinic End Time]  as time)!= cast(cpc.[Clinic Start Time] as time) and  (cast(a.[Clinic Start Time]  as time)!= cast(cpc.[Clinic End Time] as time) ))
+				and cpc.[Clinic date]=a.[Clinic Date]
+		)
+	end 
+
+		--******************************************************************
+	-- The below block inserts into the calendar for Transfer Regular Schedule
+	--******************************************************************
+	if @originatingprocess = 'Transfer Provider Update'
+Begin
+  begin 
+		Insert into [Clinic_Calendar_History] 
+		select * from [Clinic_Calendar] 
+		where [Clinic Date] between @startdate and @enddate 
+		and provider=@Provider 
+		and cast([Created On] as nvarchar(150))=@CreatedOn 
+		and [Originating Process]='Provider Regular Schedule';
+	end
+	
+	begin
+	delete from [Clinic_Calendar] where [Clinic Date] between @startdate and @enddate and provider=@Provider 
+	and cast([Created On] as nvarchar(150))=@CreatedOn and [Originating Process]='Provider Regular Schedule';
+	end
+	
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Provider_Regular_Schedule_Detail]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	provider=@Provider 
+			 and	cast([Created On] as nvarchar(150))=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from [ERD_Enterprise_Holiday_List])
+	end 
+End
+
+	if @originatingprocess = 'Room Only Regular Schedule'
+begin		
+		
+begin
+	Delete a from
+	(
+	select *,datename(dw,[Clinic Date])[Work Days],ceiling(cast(datepart(day,[Clinic Date])/7.00 as float))[Clinic Schedule Week],
+	isnull ((select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		where (cast(a.[Clinic Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		and cast([Start Time Maximum Value] as time)
+		and cast(a.[Clinic End Time] as time) BETWEEN cast([End Time Minimum Value] as time)
+		and cast([End Time Maximum Value] as time))),'All Day') [Clinic Hours Category]	
+	from [Clinic_Calendar] a where a.[Provider]=@Provider and [Originating Process]='Cancel Room Only Schedule'
+	)a where not exists
+	(
+	select '' from (
+	select [Room Only Schedule Provider],[Clinic Date],[Location],[Clinic Hours Category] from [Room_Only_Regular_Schedule_Detail] 
+	Union 
+	select [Room Only Schedule Provider],[Clinic Date],[Location],[Clinic Hours Category] from [Add_Room_Only_Schedule]
+	)b 
+	where a.[Location]=b.[Location]
+	and a.[Provider]=b.[Room Only Schedule Provider]
+	and a.[Clinic Hours Category]=b.[Clinic Hours Category]
+	and a.[Clinic Date]=b.[Clinic Date]
+	and b.[Room Only Schedule Provider]=@Provider 	
+	)
+End
+		
+		
+		
+		begin
+			Delete from [Clinic_Calendar] where [Clinic Date] between @startdate and @enddate and 
+			provider=@Provider 
+			--and [Created On]=@CreatedOn 
+			and [Originating Process] in('Room Only Regular Schedule Inprogress','Room Only Regular Schedule');
+		end
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Room Only Schedule Provider][Provider],''[Clinic Type],
+					''[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],null [Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Room_Only_Regular_Schedule_Detail] a
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Room Only Schedule Provider]=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+			 and  not exists
+		(select * from (
+		select [Room Only Schedule Provider],[Clinic Date],[Clinic Start Time],[Clinic End Time],[Location],[Clinic Hours Category] from Cancel_Room_Only_Schedule --where [Cancel Confirmation]='Yes'
+		)CPC where a.[Clinic date]=CPC.[Clinic date] and a.[Room Only Schedule Provider]=CPC.[Room Only Schedule Provider]
+		 --and a.[Location]=CPC.[Location]
+			and 
+	
+	(cast(cpc.[Clinic Start Time] as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time] as time)
+		or   cast(cpc.[Clinic End Time]  as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time] as time)
+		or cast(a.[Clinic Start Time]  as time) between  cast(cpc.[Clinic Start Time] as time) and cast( cpc.[Clinic End Time]  as time)
+		or  cast(a.[Clinic End Time]  as time) between cast(cpc.[Clinic Start Time] as time) and cast( cpc.[Clinic End Time]  as time) 
+		--			or 
+		--			(select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		--where (cast(a.[Clinic Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		--and cast([Start Time Maximum Value] as time)
+		--and cast(a.[Clinic End Time] as time) BETWEEN cast([End Time Minimum Value] as time)
+		-- and cast([End Time Maximum Value] as time)))='All Day'
+		)
+		and (cast(a.[Clinic End Time]  as time)!= cast(cpc.[Clinic Start Time] as time) and  (cast(a.[Clinic Start Time]  as time)!= cast(cpc.[Clinic End Time] as time) ))
+				and cpc.[Clinic date]=a.[Clinic Date]
+		)
+	end 
+End
+	/*
+	if @originatingprocess = 'Room Only Regular Schedule'
+
+	Begin
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Room Only Schedule Provider][Provider],''[Clinic Type],
+					''[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],null [Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [Room_Only_Regular_Schedule_Detail]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Room Only Schedule Provider]=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+*/
+	
+	if @originatingprocess = 'Transfer Room Only Update'
+	begin
+	begin 
+		Insert into [Clinic_Calendar_History] 
+		select * from [Clinic_Calendar] 
+		where [Clinic Date] between @startdate and @enddate 
+		and provider=@Provider 
+		and cast([Created On] as nvarchar(150))=@CreatedOn 
+		and [Originating Process]='Room Only Regular Schedule';
+	end
+	
+	begin
+	delete from [Clinic_Calendar] where [Clinic Date] between @startdate and @enddate and provider=@Provider 
+	and cast([Created On] as nvarchar(150))=@CreatedOn and [Originating Process]='Room Only Regular Schedule';
+	end
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Room Only Schedule Provider][Provider],''[Clinic Type],
+					''[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],null [Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Room_Only_Regular_Schedule_Detail]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Room Only Schedule Provider]=@Provider 
+			 and	cast([Created On] as nvarchar(150))=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from [ERD_Enterprise_Holiday_List])
+	end 
+end
+
+		if @originatingprocess = 'Room Only Regular Schedule Inprogress'
+		begin
+		Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					'Room Only Regular Schedule Inprogress' [Originating Process],[Clinic Date],[Room Only Schedule Provider][Provider],''[Clinic Type],
+					''[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],null [Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[Room Number],[Suite],[Mode of Delivery]
+			 FROM Room_Only_Regular_Schedule_Inprogress_Detail a
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Room Only Schedule Provider]=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+			 and not exists
+		(select * from (
+		select [Room Only Schedule Provider],[Clinic Date],[Clinic Start Time],[Clinic End Time],[Location],[Clinic Hours Category] from Cancel_Room_Only_Schedule --where [Cancel Confirmation]='Yes'
+		)CPC where a.[Clinic date]=CPC.[Clinic date] and a.[Room Only Schedule Provider]=CPC.[Room Only Schedule Provider]
+		 --and a.[Location]=CPC.[Location]
+			and 
+	
+	(cast(cpc.[Clinic Start Time] as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time] as time)
+		or   cast(cpc.[Clinic End Time]  as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time] as time)
+		or cast(a.[Clinic Start Time]  as time) between  cast(cpc.[Clinic Start Time] as time) and cast( cpc.[Clinic End Time]  as time)
+		or  cast(a.[Clinic End Time]  as time) between cast(cpc.[Clinic Start Time] as time) and cast( cpc.[Clinic End Time]  as time) 
+		--			or 
+		--			(select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		--where (cast(a.[Clinic Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		--and cast([Start Time Maximum Value] as time)
+		--and cast(a.[Clinic End Time] as time) BETWEEN cast([End Time Minimum Value] as time)
+		-- and cast([End Time Maximum Value] as time)))='All Day'
+		)
+		and (cast(a.[Clinic End Time]  as time)!= cast(cpc.[Clinic Start Time] as time) and  (cast(a.[Clinic Start Time]  as time)!= cast(cpc.[Clinic End Time] as time) ))
+				and cpc.[Clinic date]=a.[Clinic Date]
+		)
+	end 
+end
+/*
+	Begin
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					'Room Only Regular Schedule Inprogress' [Originating Process],[Clinic Date],[Room Only Schedule Provider][Provider],''[Clinic Type],
+					''[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],null [Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM Room_Only_Regular_Schedule_Inprogress_Detail
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Room Only Schedule Provider]=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+*/
+
+	--****************************************************************************
+	-- The below block inserts into the calendar for Provider Room Hold Schedule
+	--****************************************************************************
+	if @originatingprocess = 'Provider Room Hold Schedule'
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'No' [Display in Calendar],[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Provider_Room_Hold_Schedule_Detail]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	provider=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+/*
+	if @originatingprocess = 'Provider Room Hold Schedule'
+
+	Begin
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'No' [Display in Calendar],[No of Participants]
+			 FROM [Provider_Room_Hold_Schedule_Detail]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	provider=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+		if @originatingprocess = 'Provider Room Hold Schedule Inprogress'
+
+	Begin
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'No' [Display in Calendar],[No of Participants]
+			 FROM Provider_Room_Hold_Schedule_Inprogress_Detail
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	provider=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+*/
+
+	if @originatingprocess = 'Clinic Regular Schedule'
+begin
+
+	begin
+		insert into [Clinic_Calendar_History]
+		select * from [Clinic_Calendar] where [Clinic Type]=@ClinicType 
+		and [Clinic Specialty]=@ClinicSpecialty and [Originating Process]='Assign Provider Clinic'
+	end
+		
+
+	begin	    
+		delete a from
+		(
+		select *,isnull
+		((select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		where (cast(a.[Clinic Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		and cast([Start Time Maximum Value] as time)
+		and cast(a.[Clinic End Time] as time) BETWEEN cast([End Time Minimum Value] as time)
+		and cast([End Time Maximum Value] as time))),'All Day') [Clinic Hours Category] from [Clinic_Calendar] a
+		where a.[Originating Process]='Assign Provider Clinic' and a.[Clinic Type]=@ClinicType and a.[Clinic Specialty]=@ClinicSpecialty
+		)a
+		where a.[Clinic Type]=@ClinicType and a.[Clinic Specialty]=@ClinicSpecialty 
+		and not exists
+		(
+		select '' from (
+		select [Clinic Date],[Clinic Type],[Clinic Specialty],[Clinic Start Time],[Clinic End Time],[Clinic Hours Category] 
+		from [Clinic_Regular_Schedule_Detail] where [Clinic Type]=@ClinicType and [Clinic Specialty]=@ClinicSpecialty
+		Union
+		select [Clinic Date],[Clinic Type],[Clinic Specialty],[Clinic Start Time],[Clinic End Time],[Clinic Hours Category] 
+		from [Add_Clinic] where [Clinic Type]=@ClinicType and [Clinic Specialty]=@ClinicSpecialty
+		)
+		b
+		where a.[Clinic Date]=b.[Clinic Date]
+		and a.[Clinic Type]=b.[Clinic Type]
+		and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Clinic Type]=@ClinicType 
+		and a.[Clinic Specialty]=@ClinicSpecialty
+		and b.[Clinic Type]=@ClinicType 
+		and b.[Clinic Specialty]=@ClinicSpecialty
+		and cast(b.[Clinic Date] as date)>=cast(getdate() as date)
+		and 
+		(
+		(cast(a.[Clinic Start Time] as time) between cast(b.[Clinic Start Time] as time) and cast(b.[Clinic End Time] as time))
+		and (cast(a.[Clinic End Time] as time) between cast(b.[Clinic Start Time] as time) and cast(b.[Clinic End Time] as time))
+		or a.[Clinic Hours Category]=b.[Clinic Hours Category]
+		)
+		)
+	end
+	
+begin
+	Delete a from
+	(
+	select *,datename(dw,[Clinic Date])[Work Days],ceiling(cast(datepart(day,[Clinic Date])/7.00 as float))[Clinic Schedule Week],
+	isnull ((select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		where (cast(a.[Clinic Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		and cast([Start Time Maximum Value] as time)
+		and cast(a.[Clinic End Time] as time) BETWEEN cast([End Time Minimum Value] as time)
+		and cast([End Time Maximum Value] as time))),'All Day') [Clinic Hours Category]	
+	from [Clinic_Calendar] a where [Clinic Type]=@ClinicType and [Clinic Specialty]=@ClinicSpecialty and [Originating Process]='Cancel Clinic'
+	)a where not exists
+	(
+	select '' from (
+	select [Clinic Type],[Clinic Specialty],[Clinic Date],[Location],[Clinic Hours Category] from [Clinic_Regular_Schedule_Detail] 
+	Union 
+	select [Clinic Type],[Clinic Specialty],[Clinic Date],[Location],[Clinic Hours Category] from [Add_Clinic]
+	)b 
+	where a.[Location]=b.[Location]
+	and a.[Clinic Type]=b.[Clinic Type]
+	and a.[Clinic Specialty]=b.[Clinic Specialty]
+	and a.[Clinic Hours Category]=b.[Clinic Hours Category]
+	and a.[Clinic Date]=b.[Clinic Date]
+	and b.[Clinic Type]=@ClinicType 
+	and b.[Clinic Specialty]=@ClinicSpecialty 
+	)
+End
+	begin
+	delete from [Clinic_Calendar] where	[Clinic Type]=@ClinicType and [Clinic Specialty]=@ClinicSpecialty
+	and [Clinic Date] between @startdate and @enddate
+	--and [Created On]=@CreatedOn 
+	and [Originating Process] in('Clinic Regular Schedule Inprogress','Clinic Regular Schedule');
+	end
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Clinic_Regular_Schedule_Detail] a
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Clinic Type]=@ClinicType
+			 and [Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+			 and not exists
+		(select * from (
+		select [Clinic Type],[Clinic Specialty],[Clinic Date],[Clinic Start Time],[Clinic End Time],[Location],[Clinic Hours Category] from Cancel_Clinic --where [Cancel Confirmation]='Yes'
+		)CPC where a.[Clinic date]=CPC.[Clinic date] and a.[Clinic Type]=CPC.[Clinic Type] 
+		and a.[Clinic Specialty]=CPC.[Clinic Specialty]
+		--and a.[Location]=CPC.[Location]
+			and 
+	
+	(cast(cpc.[Clinic Start Time] as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time] as time)
+		or   cast(cpc.[Clinic End Time]  as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time] as time)
+		or cast(a.[Clinic Start Time]  as time) between  cast(cpc.[Clinic Start Time] as time) and cast( cpc.[Clinic End Time]  as time)
+		or  cast(a.[Clinic End Time]  as time) between cast(cpc.[Clinic Start Time] as time) and cast( cpc.[Clinic End Time]  as time) 
+		--			or 
+		--			(select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		--where (cast(a.[Clinic Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		--and cast([Start Time Maximum Value] as time)
+		--and cast(a.[Clinic End Time] as time) BETWEEN cast([End Time Minimum Value] as time)
+		-- and cast([End Time Maximum Value] as time)))='All Day'
+		)
+		and (cast(a.[Clinic End Time]  as time)!= cast(cpc.[Clinic Start Time] as time) and  (cast(a.[Clinic Start Time]  as time)!= cast(cpc.[Clinic End Time] as time) ))
+				and cpc.[Clinic date]=a.[Clinic Date]
+		)
+	end 
+end
+
+/*
+if @originatingprocess = 'Clinic Regular Schedule'
+
+	Begin
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [Clinic_Regular_Schedule_Detail]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Clinic Type]=@ClinicType
+			 and [Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+*/
+	
+	if @originatingprocess = 'Transfer Clinic Update'
+
+  begin 
+  begin
+		Insert into [Clinic_Calendar_History] 
+		select * from [Clinic_Calendar] 
+		where [Clinic Date] between @startdate and @enddate 
+		and	[Clinic Type]=@ClinicType
+		and [Clinic Specialty]=@ClinicSpecialty
+		and cast([Created On] as nvarchar(150))=@CreatedOn 
+		and [Originating Process]='Clinic Regular Schedule';
+	end
+	
+	begin
+	delete from [Clinic_Calendar] where [Clinic Date] between @startdate and @enddate and [Clinic Type]=@ClinicType	 and [Clinic Specialty]=@ClinicSpecialty 
+	and cast([Created On] as nvarchar(150))=@CreatedOn and [Originating Process]='Clinic Regular Schedule';
+	end
+	
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Clinic_Regular_Schedule_Detail]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Clinic Type]=@ClinicType
+			 and	[Clinic Specialty]=@ClinicSpecialty
+			 and	cast([Created On] as nvarchar(150))=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from [ERD_Enterprise_Holiday_List])
+	end 
+end
+
+	if @originatingprocess = 'Clinic Regular Schedule Inprogress'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Clinic_Regular_Schedule_Inprogress_Detail] a
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Clinic Type]=@ClinicType
+			 and [Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+			 and not exists
+		(select * from (
+		select [Clinic Type],[Clinic Specialty],[Clinic Date],[Clinic Start Time],[Clinic End Time],[Location],[Clinic Hours Category] from Cancel_Clinic --where [Cancel Confirmation]='Yes'
+		)CPC where a.[Clinic date]=CPC.[Clinic date] and a.[Clinic Type]=CPC.[Clinic Type] 
+		and a.[Clinic Specialty]=CPC.[Clinic Specialty]
+		--and a.[Location]=CPC.[Location]
+			and 
+	
+	(cast(cpc.[Clinic Start Time] as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time] as time)
+		or   cast(cpc.[Clinic End Time]  as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time] as time)
+		or cast(a.[Clinic Start Time]  as time) between  cast(cpc.[Clinic Start Time] as time) and cast( cpc.[Clinic End Time]  as time)
+		or  cast(a.[Clinic End Time]  as time) between cast(cpc.[Clinic Start Time] as time) and cast( cpc.[Clinic End Time]  as time) 
+		--			or 
+		--			(select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		--where (cast(a.[Clinic Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		--and cast([Start Time Maximum Value] as time)
+		--and cast(a.[Clinic End Time] as time) BETWEEN cast([End Time Minimum Value] as time)
+		-- and cast([End Time Maximum Value] as time)))='All Day'
+		)
+		and (cast(a.[Clinic End Time]  as time)!= cast(cpc.[Clinic Start Time] as time) and  (cast(a.[Clinic Start Time]  as time)!= cast(cpc.[Clinic End Time] as time) ))
+				and cpc.[Clinic date]=a.[Clinic Date]
+		)
+	end 
+
+	/*
+		if @originatingprocess = 'Clinic Regular Schedule Inprogress'
+
+	Begin
+	
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [Clinic_Regular_Schedule_Inprogress_Detail]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Clinic Type]=@ClinicType
+			 and [Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+	*/
+
+	if @originatingprocess = 'Add Provider Clinic'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration]
+					,dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic End Time],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Add_Provider_Clinic]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	provider=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+/*
+	if @originatingprocess = 'Add Provider Clinic'
+
+	Begin
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic End Time],[clinic hours category],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [Add_Provider_Clinic]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	provider=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+*/
+if @originatingprocess = 'Add Room Only Schedule'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Room Only Schedule Provider][Provider],''[Clinic Type],
+					''[Clinic Specialty],[Location],[Clinic Duration]
+					,dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic End Time],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],''[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Add_Room_Only_Schedule]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Room Only Schedule Provider]=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+/*
+	if @originatingprocess = 'Add Room Only Schedule'
+
+	Begin
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Room Only Schedule Provider][Provider],''[Clinic Type],
+					''[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic End Time],[clinic hours category],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],''[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [Add_Room_Only_Schedule]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Room Only Schedule Provider]=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+*/
+
+	if @originatingprocess = 'Add As Covering Provider'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic End Time],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Add_Provider_Clinic]
+			 where	--[Clinic Date] between @startdate and @enddate 
+					provider=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+/*
+	if @originatingprocess = 'Add As Covering Provider'
+
+	Begin
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic End Time],[clinic hours category],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [Add_Provider_Clinic]
+			 where	--[Clinic Date] between @startdate and @enddate 
+					provider=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end
+*/
+
+	if @originatingprocess = 'Add Clinic'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration]
+					,dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic Start Time]
+					,dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic End Time],
+			 1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Add_Clinic]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and [Clinic Type]=@ClinicType 
+		 and [Clinic Specialty]=@ClinicSpecialty
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+/*
+	if @originatingprocess = 'Add Clinic'
+
+	Begin
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration]
+					,dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic Start Time]
+					,dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103)))[Clinic End Time],
+				 [clinic hours category],1 [Ranks],[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [Add_Clinic]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and [Clinic Type]=@ClinicType 
+		 and [Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+*/
+
+	if @originatingprocess = 'Cancel Provider Clinic'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Cancel_Provider_Clinic]
+			 where	--[Clinic Date] between @startdate and @enddate 
+					provider=@Provider 
+			 and	[Created On]=@CreatedOn
+			 --and [Cancel Confirmation]='Yes'
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+
+----
+
+if @originatingprocess = 'Cancel MDC Clinic'
+BEGIN
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Cancel_Provider_Clinic]
+			 where	--[Clinic Date] between @startdate and @enddate 
+					--provider=@Provider 
+					[Clinic Type]=@ClinicType 
+			 and	[Clinic Specialty]=@ClinicSpecialty
+			 and	[Created On]=@CreatedOn
+			 --and [Cancel Confirmation]='Yes'
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+ 	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],''[Building],''[Floor],''[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM Cancel_Clinic
+			 where	--[Clinic Date] between @startdate and @enddate 
+					[Clinic Type]=@ClinicType
+			 and	[Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+END
+
+---
+
+----
+
+if @originatingprocess = 'Cancel MDC Clinic Inprogress'
+BEGIN
+	Begin
+		insert into [Clinic_Calendar]
+		SELECT  distinct [Created On],
+				concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+				[Clinic Specialty],[Location],[Clinic Duration],
+				dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+				dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+				1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+				1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+				,[Room Number],[Suite],[Mode of Delivery]
+			FROM [dbo].[2_34_Cancel Provider Clinic]
+			where	--[Clinic Date] between @startdate and @enddate 
+			 	[Clinic Type]=@ClinicType 
+			and	[Clinic Specialty]=@ClinicSpecialty
+			and	[Created On]=@CreatedOn
+			and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+
+ Begin
+		insert into [Clinic_Calendar]
+		SELECT  distinct [Created On],
+				concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+				[Clinic Specialty],[Location],[Clinic Duration],
+				dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+				dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+				1 [Ranks],''[Rooms Required],''[Building],''[Floor],''[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+				1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+				,[Room Number],[Suite],[Mode of Delivery]
+			FROM [dbo].[2_45_Cancel Clinic]
+			where	--[Clinic Date] between @startdate and @enddate 
+			[Clinic Type]=@ClinicType
+			and	[Clinic Specialty]=@ClinicSpecialty 
+			and	[Created On]=@CreatedOn
+			and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end
+END
+---
+
+
+	if @originatingprocess = 'Cancel Provider Clinic Inprogress'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [dbo].[2_34_Cancel Provider Clinic]
+			 where	--[Clinic Date] between @startdate and @enddate 
+			 	provider=@Provider 
+			 and	[Created On]=@CreatedOn
+			 --and [Cancel Confirmation]='Yes'
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+
+	if @originatingprocess = 'Cancel Room Only Schedule'
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Room Only Schedule Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],Null,null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Cancel_Room_Only_Schedule]
+			 where	---[Clinic Date] between @startdate and @enddate 
+			 	[Room Only Schedule Provider]=@Provider 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+	if @originatingprocess = 'Cancel Room Only Schedule Inprogress'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Room Only Schedule Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],Null,null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [dbo].[2_57_Cancel Room Only Schedule]
+			 where	--[Clinic Date] between @startdate and @enddate 
+			 	[Room Only Schedule Provider]=@Provider 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+	if @originatingprocess = 'Shorten Provider Clinic'
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Shorten_Provider_Clinic_Detail]
+			 where	--[Clinic Date] between @startdate and @enddate 
+					provider=@Provider 
+			 and	[Created On]=@CreatedOn
+			 --and [Confirm Cancel]='Yes'
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+		
+	end 
+	
+	if @originatingprocess = 'Shorten Provider Clinic Inprogress'
+
+	Begin
+	
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [dbo].[2_43_Shorten Provider Clinic]
+			 where	--[Clinic Date] between @startdate and @enddate 
+			 	provider=@Provider 
+			 and	[Created On]=@CreatedOn
+			 --and [Confirm Cancel]='Yes'
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+
+	if @originatingprocess = 'Shorten Room Only Clinic'
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Room Only Schedule Provider][Provider],''[Clinic Type],
+					''[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Shorten_Room_Only_Schedule_Detail]
+			 where	--[Clinic Date] between @startdate and @enddate 
+					[Room Only Schedule Provider]=@Provider 
+			 and	[Created On]=@CreatedOn
+			 --and [Confirm Cancel]='Yes'
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+	
+	if @originatingprocess = 'Shorten Room Only Clinic Inprogress'
+
+	Begin
+	
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Room Only Schedule Provider][Provider],''[Clinic Type],
+					''[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [dbo].[2_63_Shorten Room Only Schedule]
+			 where	--[Clinic Date] between @startdate and @enddate 
+			 	[Room Only Schedule Provider]=@Provider 
+			 and	[Created On]=@CreatedOn
+			 --and [Confirm Cancel]='Yes'
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+if @originatingprocess = 'Convert Clinic Inprogress'
+BEGIN
+		insert into [Clinic_Calendar]
+		SELECT  distinct [Created On],
+				concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+				[Clinic Specialty],[Location],[Clinic Duration],
+				dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+				dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+				1 [Ranks],''[Rooms Required],''[Building],''[Floor],''[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+				1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+				,[Room Number],[Suite],[Mode of Delivery]
+			FROM [dbo].[2_102_Convert Clinic to Telehealth]
+			where	--[Clinic Date] between @startdate and @enddate 
+			[Clinic Type]=@ClinicType
+			and	[Clinic Specialty]=@ClinicSpecialty 
+			and	[Created On]=@CreatedOn
+			and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+
+END
+
+if @originatingprocess = 'Convert Clinic'
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT distinct  [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],''[Building],''[Floor],''[wing],''[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM Convert_Clinic
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Clinic Type]=@ClinicType
+			 and	[Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+if @originatingprocess = 'Convert Provider Clinic Inprogress'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [dbo].[2_101_Convert Provider Clinic to Telehealth]
+			 where	provider=@Provider 
+			 and	[Created On]=@CreatedOn
+			 --and [Cancel Confirmation]='Yes'
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end
+if @originatingprocess = 'Convert Provider Clinic'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [dbo].[Convert_Provider_Clinic]
+			 where	provider=@Provider 
+			 and	[Created On]=@CreatedOn
+			 --and [Cancel Confirmation]='Yes'
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end
+
+	if @originatingprocess = 'Edit Provider Clinic'
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider]
+					,case when [Clinic Type]=[Edit Clinic Type] then [Clinic Type] ELSE [Edit Clinic Type] end as [Clinic Type]
+					,case when [Clinic Specialty]=[Edit Clinic Specialty] then [Clinic Specialty] ELSE [Edit Clinic Specialty] end as [Clinic Specialty]
+					,[Location],[Clinic Duration],
+					Case when [Edit Clinic]='Edit Clinic'
+					then dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) ELSE
+					dateadd(hour,datepart(HOUR,[Edit Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Edit Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103)))
+					end as [Clinic Start Time],
+					Case when [Edit Clinic]='Edit Clinic'
+					then dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) ELSE
+					dateadd(hour,datepart(HOUR,[Edit Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Edit Clinic End Time]),CONVERT(datetime, [Clinic Date], 103)))
+					end as [Clinic End Time],
+					1 [Ranks],''[Rooms Required],''[Building],''[Floor],''[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Edit_Provider_Clinic_Specialty]
+			 where	--[Clinic Date] between @startdate and @enddate 
+					provider=@Provider 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+	if @originatingprocess = 'Edit Provider Clinic Inprogress'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Provider]
+					,case when [Clinic Type]=[Edit Clinic Type] then [Clinic Type] ELSE [Edit Clinic Type] end as [Clinic Type]
+					,case when [Clinic Specialty]=[Edit Clinic Specialty] then [Clinic Specialty] ELSE [Edit Clinic Specialty] end as [Clinic Specialty]
+					,[Location],[Clinic Duration],
+					Case when [Edit Clinic]='Edit Clinic'
+					then dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) ELSE
+					dateadd(hour,datepart(HOUR,[Edit Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Edit Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103)))
+					end as [Clinic Start Time],
+					Case when [Edit Clinic]='Edit Clinic'
+					then dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) ELSE
+					dateadd(hour,datepart(HOUR,[Edit Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Edit Clinic End Time]),CONVERT(datetime, [Clinic Date], 103)))
+					end as [Clinic End Time],
+					1 [Ranks],''[Rooms Required],''[Building],''[Floor],''[wing],''[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [dbo].[2_44_Edit Provider Clinic Specialty]
+			 where	--[Clinic Date] between @startdate and @enddate 
+			 	provider=@Provider 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	
+	end 
+
+if @originatingprocess = 'Limit Provider Schedule'
+	Begin		
+		--Delete from [Clinic_Calendar] where [Originating Process]=@originatingprocess and [Created On]<@CreatedOn
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,''[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Limit_Provider_Schedule]
+			 where	--[Clinic Date] between @startdate and @enddate 
+					provider=@Provider 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+	if @originatingprocess = 'Limit Provider Schedule Inprogress'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,''[Room Number],[Suite],[Mode of Delivery]
+			 FROM [dbo].[2_46_Limit Provider Schedule]
+			 where	--[Clinic Date] between @startdate and @enddate 
+			 	provider=@Provider 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+
+if @originatingprocess = 'Limit Provider Schedule'
+
+	Begin
+		--Delete from [dbo].[ERD_Enterprise_Schedule_Data] where [Originating Process]=@originatingprocess and [Created On]<@CreatedOn
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],''[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [Limit_Provider_Schedule]
+			 where	--[Clinic Date] between @startdate and @enddate 
+			 	provider=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+if @originatingprocess = 'Limit Provider Schedule Inprogress'
+
+	Begin
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],''[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [dbo].[2_46_Limit Provider Schedule]
+			 where	--[Clinic Date] between @startdate and @enddate 
+			 	provider=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+-----
+
+
+
+if @originatingprocess = 'Limit Room Only Schedule'
+	Begin		
+		--Delete from [Clinic_Calendar] where [Originating Process]=@originatingprocess and [Created On]<@CreatedOn
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Room Only Schedule Provider][Provider],''[Clinic Type],
+					''[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,''[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Limit_Room_Only_Schedule]
+			 where	--[Clinic Date] between @startdate and @enddate 
+					[Room Only Schedule Provider]=@Provider 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+	if @originatingprocess = 'Limit Room Only Schedule Inprogress'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT distinct  [Created On],
+					concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Room Only Schedule Provider][Provider],''[Clinic Type],
+					''[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,''[Room Number],[Suite],[Mode of Delivery]
+			 FROM [dbo].[2_64_Limit Room Only Schedule]
+			 where	--[Clinic Date] between @startdate and @enddate 
+			 	[Room Only Schedule Provider]=@Provider 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+/*
+if @originatingprocess = 'Limit Room Only Schedule'
+
+	Begin
+		--Delete from [dbo].[ERD_Enterprise_Schedule_Data] where [Originating Process]=@originatingprocess and [Created On]<@CreatedOn
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Room Only Schedule Provider][Provider],''[Clinic Type],
+					''[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],''[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [Limit_Room_Only_Schedule]
+			 where	--[Clinic Date] between @startdate and @enddate 
+			 	[Room Only Schedule Provider]=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+if @originatingprocess = 'Limit Room Only Schedule Inprogress'
+
+	Begin
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Room Only Schedule Provider][Provider],''[Clinic Type],
+					''[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],''[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [dbo].[2_64_Limit Room Only Schedule]
+			 where	--[Clinic Date] between @startdate and @enddate 
+			 	[Room Only Schedule Provider]=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+*/
+-----
+
+if @originatingprocess = 'Limit Clinic Schedule'
+	Begin
+		--Delete from [Clinic_Calendar] where [Originating Process]=@originatingprocess and [Created On]<@CreatedOn
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Limit_Clinic_Schedule]
+			 where	--[Clinic Date] between @startdate and @enddate 
+					[Clinic Type]=@ClinicType
+			 and	[Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+	if @originatingprocess = 'Limit Clinic Schedule Inprogress'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [dbo].[2_47_Limit Clinic Schedule]
+			 where	--[Clinic Date] between @startdate and @enddate 
+			 	[Clinic Type]=@ClinicType
+			 and	[Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+/*
+if @originatingprocess = 'Limit Clinic Schedule'
+
+	Begin
+		Delete from [dbo].[ERD_Enterprise_Schedule_Data] where [Originating Process]=@originatingprocess and [Created On]<@CreatedOn
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],''[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [Limit_Clinic_Schedule]
+			 where	--[Clinic Date] between @startdate and @enddate 
+			 	[Clinic Type]=@ClinicType
+			 and	[Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+if @originatingprocess = 'Limit Clinic Schedule Inprogress'
+
+	Begin
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],''[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [dbo].[2_47_Limit Clinic Schedule]
+			 where	--[Clinic Date] between @startdate and @enddate 
+					[Clinic Type]=@ClinicType
+			 and	[Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn 
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+*/
+
+if @originatingprocess = 'Cancel Clinic'
+	begin
+	begin	 
+	  delete a from
+		(
+		select [Clinic Date],[Clinic Type],[Clinic Specialty],[Clinic Start Time],[Clinic End Time],isnull
+		((select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		where (cast(a.[Clinic Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		and cast([Start Time Maximum Value] as time)
+		and cast(a.[Clinic End Time] as time) BETWEEN cast([End Time Minimum Value] as time)
+		and cast([End Time Maximum Value] as time))),'All Day') [Clinic Hours Category] from  [Clinic_Calendar] a
+		where a.[Originating Process]='Assign Provider Clinic' and a.[Clinic Type]=@ClinicType and a.[Clinic Specialty]=@ClinicSpecialty
+		)a
+		inner join [Cancel_Clinic] b on cast(a.[Clinic Date] as date)=cast(b.[Clinic Date] as date)
+		and a.[Clinic Type]=b.[Clinic Type] and a.[Clinic Specialty]=b.[Clinic Specialty] 
+		and b.[Clinic Type]=@ClinicType and b.[Clinic Specialty]=@ClinicSpecialty
+		and 
+		(
+		(cast(a.[Clinic Start Time] as time) between cast(b.[Clinic Start Time] as time) and cast(b.[Clinic End Time] as time))
+		and (cast(a.[Clinic End Time] as time) between cast(b.[Clinic Start Time] as time) and cast(b.[Clinic End Time] as time))
+		or a.[Clinic Hours Category]=b.[Clinic Hours Category]
+		)
+		where a.[Clinic Type]=@ClinicType 
+		and a.[Clinic Specialty]=@ClinicSpecialty
+		and b.[Clinic Type]=@ClinicType 
+		and b.[Clinic Specialty]=@ClinicSpecialty
+		and b.[Created On]=@CreatedOn
+	end
+	
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],''[Building],''[Floor],''[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM Cancel_Clinic
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Clinic Type]=@ClinicType
+			 and	[Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+	End
+	if @originatingprocess = 'Cancel Clinic Inprogress'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					concat([Originating Process],' Inprogress')[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],''[Building],''[Floor],''[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [dbo].[2_45_Cancel Clinic]
+		 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Clinic Type]=@ClinicType
+			 and	[Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+	-----
+
+if @originatingprocess = 'Shorten Clinic'
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [Shorten_Clinic_Detail]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Clinic Type]=@ClinicType
+			 and	[Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+	
+if @originatingprocess = 'Shorten Clinic Inprogress'
+
+	Begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+					concat([Originating Process],' Inprogress') [Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],
+					dateadd(hour,datepart(HOUR,[Clinic Start Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic Start Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic Start Time],
+					dateadd(hour,datepart(HOUR,[Clinic End Time]),dateadd(MINUTE, datepart(MINUTE,[Clinic End Time]),CONVERT(datetime, [Clinic Date], 103))) [Clinic End Time],
+					1 [Ranks],''[Rooms Required],[Building],[Floor],[wing],[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder],'Yes' [Display in Calendar]
+					,[Room Number],[Suite],[Mode of Delivery]
+			 FROM [dbo].[2_49_Shorten Clinic]
+			 where	[Clinic Date] between @startdate and @enddate 
+			 and	[Clinic Type]=@ClinicType
+			 and	[Clinic Specialty]=@ClinicSpecialty 
+			 and	[Created On]=@CreatedOn
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end 
+
+if @originatingprocess = 'Assign Provider Clinic'
+	Begin
+		 begin
+			Delete from [Clinic_Calendar] where [Originating Process]='Assign Provider Clinic' and [Clinic Date] between @startdate and @enddate 	
+			and	[Clinic Type]=@ClinicType and	[Clinic Specialty]=@ClinicSpecialty 
+	       end
+
+		   begin
+			update a set a.[building]=b.[building],a.[floor]=b.[floor]
+			,a.[wing]=b.[wing],a.[suite]=b.[suite],a.[room name]=b.[room name],a.[room number]=b.[room number],a.[DEP Name]=b.[DEP Name]
+			,a.[Mode of Delivery]=b.[Mode of Delivery]		
+			from provider_assigned_clinics a		
+			left join  [VW_Get_Clinic_Room_Details] b  on  cast(a.[Clinic Date]as date)=cast(b.[Clinic Date] as date)		
+			and a.[Clinic Type]=b.[Clinic Type] and a.[Clinic Specialty]=b.[Clinic Specialty]		
+			and a.[Location]=b.[location]		
+			and cast(a.[Clinic Start Time]as time) between cast(b.[Clinic Start Time]as time) 		
+			and cast(b.[Clinic End Time]as time)		
+			and cast(a.[Clinic End Time]as time) between cast(b.[Clinic Start Time]as time)		
+			and cast(b.[Clinic End Time]as time)		
+			where	a.[Clinic Date] between @startdate and @enddate 	
+			and	a.[Clinic Type]=@ClinicType and	a.[Clinic Specialty]=@ClinicSpecialty 
+			--and	a.[Created On]=@CreatedOn	
+end
+
+
+begin
+		insert into [Clinic_Calendar]
+			SELECT  distinct [Created On],
+		a.[Originating Process],a.[Clinic Date],a.[Provider],a.[Clinic Type],
+		a.[Clinic Specialty],a.[Location],a.[Clinic Duration],
+		dateadd(hour,datepart(HOUR,a.[Assign Start Time]),dateadd(MINUTE, datepart(MINUTE,a.[Assign Start Time]),CONVERT(datetime, a.[Clinic Date], 103))) [Clinic Start Time],
+		dateadd(hour,datepart(HOUR,a.[Assign End Time]),dateadd(MINUTE, datepart(MINUTE,a.[Assign End Time]),CONVERT(datetime, a.[Clinic Date], 103))) [Clinic End Time],
+		1 [Ranks],''[Rooms Required]
+		,[Building]
+		,[Floor]
+		,[wing]
+		,[Room Name]
+		--,b.[Floor],b.[wing],b.[Room Name]
+		,replace(replace(
+					isnull([Clinic Type],'')+isnull([Clinic Specialty],'')+isnull([Location],'')
+					+isnull(cast(cast([Clinic Start Time] as time)as varchar(5)),'')
+					+isnull(cast(cast([Clinic end Time] as time) as varchar(5)),'')
+					+isnull(convert(varchar(8),
+					CONVERT(date, a.[Clinic Date], 103) , 112),''),',',''),' ','')[Kezava Unique ID]
+		,a.[Employee Login ID],null [Linked Clinic Name],
+		1 [RowID],null [Legends],null [Color code],null [Userid],null [CalendarOrder]
+		, 'Yes' [Display in Calendar],[Room Number],[Suite],''[Mode of Delivery]
+		FROM Provider_Assigned_Clinics a
+		where	a.[Clinic Date] between @startdate and @enddate 
+		and	a.[Clinic Type]=@ClinicType
+		and	a.[Clinic Specialty]=@ClinicSpecialty 
+		--and	a.[Created On]=@CreatedOn
+		and	a.[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end
+End
+
+/*		
+if @originatingprocess = 'Cancel Provider Clinic'
+
+	Begin
+		insert into [dbo].[ERD_Enterprise_Schedule_Data]
+			SELECT [Created On],
+					[Originating Process],[Clinic Date],[Provider],[Clinic Type],
+					[Clinic Specialty],[Location],[Clinic Duration],[Clinic Start Time],
+					[Clinic End Time],[clinic hours category],1 [Ranks],''[Rooms Required],[Building],[Floor],
+					[wing],Suite,[Room Name],[Kezava Unique ID],[Employee Login ID],null [Linked Clinic Name],
+					1 [RowID],null [Legends],null [Color code],null [Userid],
+					null [CalendarOrder],'Yes' [Display in Calendar],[No of Participants]
+			 FROM [Cancel_Provider_Clinic]
+			 where	--[Clinic Date] between @startdate and @enddate 
+					provider=@Provider 
+			 and	[Created On]=@CreatedOn 
+			 and [Cancel Confirmation]='Yes'
+			 and	[Clinic Date] not in(select [Holiday Date] from .[ERD_Enterprise_Holiday_List])
+	end
+*/
+
+/* If we need to show both schedule and Cancel Inprogress*/
+		--Delete b from 
+		--(select * from [Clinic_Calendar] where [Originating Process] not in('Cancel Provider Clinic Inprogress','Cancel Provider Clinic'))a
+		--inner join 
+		--(select * from [dbo].[2_34_Cancel Provider Clinic] 
+		--where [Originating Process]='Cancel Provider Clinic Inprogress' and [Cancel Confirmation]='Yes'
+		--)b
+		--on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider] and a.[Kezava Unique ID]=b.[Kezava Unique ID] and b.[Created On]>a.[Created On]
+ 
+ if @originatingprocess in ('Cancel Provider Clinic Inprogress','Cancel Provider Clinic','Cancel MDC Clinic','Cancel MDC Clinic Inprogress'
+ ,'Convert Provider Clinic Inprogress'
+ ,'Convert Provider Clinic')
+ BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation],[Clinic Start Time],[Clinic End Time]  from [Cancel_Provider_Clinic]
+	Union
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation],[Clinic Start Time],[Clinic End Time] from [dbo].[2_34_Cancel Provider Clinic] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+	--and a.[Kezava Unique ID]=b.[Kezava Unique ID]
+	and cast(a.[Clinic Start Time] as time)=cast(b.[Clinic Start Time] as time) 
+	and cast(a.[Clinic End Time] as time)=cast(b.[Clinic End Time] as time)
+	where a.[Originating Process] not in ('Cancel Provider Clinic','Cancel Provider Clinic Inprogress')
+	and b.[Created On]>=a.[Created On]
+	--and b.[Cancel Confirmation]='Yes'
+	End
+
+	Begin 
+		Delete a from [Clinic_Calendar] a inner join [Cancel_Provider_Clinic] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and cast(a.[Clinic Start Time] as time)=cast(b.[Clinic Start Time] as time) 
+	    and cast(a.[Clinic End Time] as time)=cast(b.[Clinic End Time] as time)
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Cancel Provider Clinic' and b.[Created On]>=a.[Created On]
+		--and b.[Cancel Confirmation]='Yes'
+	End
+	/*begin
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [Convert_Provider_Clinic]
+	Union
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [dbo].[2_101_Convert Provider Clinic to Telehealth]
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+	and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+	where a.[Originating Process] not in ('Convert Provider Clinic Inprogress' ,'Convert Provider Clinic')
+	and b.[Created On]>=a.[Created On]
+	--and b.[Cancel Confirmation]='Yes'
+	End
+	*/
+
+	Begin 
+		Delete a from [Clinic_Calendar] a inner join [Convert_Provider_Clinic] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Convert Provider Clinic' and b.[Created On]>=a.[Created On]
+		--and b.[Cancel Confirmation]='Yes'
+	End
+End
+/*
+ Begin 
+	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join 
+	(
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [Cancel_Provider_Clinic]
+	Union
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [dbo].[2_34_Cancel Provider Clinic] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Cancel Provider Clinic','Cancel Provider Clinic Inprogress')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Cancel Confirmation]='Yes'
+ End
+ 
+
+ Begin 
+		Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Cancel_Provider_Clinic] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Cancel Provider Clinic' and b.[Created On]>=a.[Created On]
+		--and b.[Cancel Confirmation]='Yes'
+ End
+
+ Begin 
+	Delete a from [dbo].[ERD_Global_Schedule_Detail] a inner join 
+	(
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [Cancel_Provider_Clinic]
+	Union
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [dbo].[2_34_Cancel Provider Clinic] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Cancel Provider Clinic','Cancel Provider Clinic Inprogress')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Cancel Confirmation]='Yes'
+ End
+
+ Begin 
+		Delete a from [dbo].[ERD_Global_Schedule_Detail] a inner join [Cancel_Provider_Clinic] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Cancel Provider Clinic' and b.[Created On]>=a.[Created On]
+		--and b.[Cancel Confirmation]='Yes'
+ End
+ */
+
+
+/*
+ if @originatingprocess in('Shorten Clinic Inprogress','Shorten Clinic')
+ BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [Shorten_Clinic]
+	Union
+	select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [dbo].[2_49_Shorten Clinic] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in ('Shorten Clinic Inprogress','Shorten Clinic')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+ End
+
+ Begin 
+		Delete a from [Clinic_Calendar] a inner join [Shorten_Clinic] b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Shorten Clinic' and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+ End
+
+ Begin 
+	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join 
+	(
+	select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [Shorten_Clinic]
+	Union
+	select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [dbo].[2_49_Shorten Clinic] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in ('Shorten Clinic Inprogress','Shorten Clinic')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+ End
+
+ Begin 
+	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Shorten_Clinic] b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Specialty]=b.[Clinic Specialty]
+	and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Shorten Clinic' and b.[Created On]>=a.[Created On]
+	--and b.[Confirm Cancel]='Yes'
+ End
+END
+*/
+
+if @originatingprocess in('Shorten Clinic Inprogress')
+BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	--select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [Shorten_Clinic]
+	--Union
+	select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [dbo].[2_49_Shorten Clinic]
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Shorten Clinic Inprogress')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+	End
+END
+
+
+if @originatingprocess in('Shorten Clinic')
+BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [Shorten_Clinic]
+	--Union
+	--select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [dbo].[2_49_Shorten Clinic]
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Shorten Clinic')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+	End
+
+ 
+	Begin 
+
+		Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Shorten_Clinic] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Shorten Clinic' and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+	End
+END
+
+
+----Old APC update Query
+if @originatingprocess in('Assign Provider Clinic')
+BEGIN
+ Begin 
+		Delete a from [Clinic_Calendar] a inner join Provider_Assigned_Clinics b 
+		on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Type]=b.[Clinic Type] 
+		and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and cast(a.[Clinic Start Time] as time)=cast(b.[Clinic Start Time] as time)
+		and cast(a.[Clinic End Time] as time)=cast(b.[Clinic End Time] as time)
+		and a.[Location]=b.[Location]
+		where a.[Originating Process]!='Assign Provider Clinic' 
+		and b.[Created On]>=a.[Created On]
+		and a.[Clinic Type]=@ClinicType 
+		and a.[Clinic Specialty]=@ClinicSpecialty
+		and b.[Clinic Type]=@ClinicType 
+		and b.[Clinic Specialty]=@ClinicSpecialty
+  End
+End
+ /*
+ Begin 
+	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join 
+	(
+	select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from Provider_Assigned_Clinics
+	Union
+	select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [dbo].[2_45_Cancel Clinic] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in ('Cancel Clinic Inprogress','Cancel Clinic')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Cancel Confirmation]='Yes'
+ End
+
+ Begin 
+	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Cancel_Clinic] b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Specialty]=b.[Clinic Specialty]
+	and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Cancel Clinic' and b.[Created On]>=a.[Created On]
+	--and b.[Cancel Confirmation]='Yes'
+ End
+ */
+
+
+ if @originatingprocess in('Cancel Clinic Inprogress','Cancel Clinic','Cancel MDC Clinic','Cancel MDC Clinic Inprogress','Convert Clinic','Convert Clinic Inprogress')
+ BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [Cancel_Clinic]
+	--Union
+	--select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [dbo].[2_45_Cancel Clinic] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in ('Cancel Clinic')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Cancel Confirmation]='Yes'
+ End
+
+ Begin 
+		Delete a from [Clinic_Calendar] a inner join [Cancel_Clinic] b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Cancel Clinic' and b.[Created On]>=a.[Created On]
+		--and b.[Cancel Confirmation]='Yes'
+ End
+ 
+ begin
+ 	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [Convert_Clinic]
+	--Union
+	--select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [dbo].[2_102_Convert Clinic to Telehealth] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in ('Convert Clinic')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Cancel Confirmation]='Yes'
+ End
+ Begin 
+		Delete a from [Clinic_Calendar] a inner join [convert_Clinic] b on a.[Clinic Date]=b.[Clinic Date] 
+		and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Convert Clinic'
+		and b.[Created On]>=a.[Created On]
+		--and b.[Cancel Confirmation]='Yes'
+ End
+End
+ 
+ /*
+ Begin 
+	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join 
+	(
+	select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [Cancel_Clinic]
+	--Union
+	--select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [dbo].[2_45_Cancel Clinic] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in ('Cancel Clinic')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Cancel Confirmation]='Yes'
+ End
+
+ Begin 
+	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Cancel_Clinic] b on a.[Clinic Date]=b.[Clinic Date] 
+	and a.[Clinic Specialty]=b.[Clinic Specialty]
+	and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Cancel Clinic' and b.[Created On]>=a.[Created On]
+	--and b.[Cancel Confirmation]='Yes'
+ End
+ Begin 
+	Delete a from [dbo].[ERD_Global_Schedule_Detail] a inner join 
+	(
+	select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [Cancel_Clinic]
+	--Union
+	--select Distinct [Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [dbo].[2_45_Cancel Clinic] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in ('Cancel Clinic')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Cancel Confirmation]='Yes'
+ End
+
+ Begin 
+	Delete a from [dbo].[ERD_Global_Schedule_Detail] a inner join [Cancel_Clinic] b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Specialty]=b.[Clinic Specialty]
+	and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Cancel Clinic' and b.[Created On]>=a.[Created On]
+	--and b.[Cancel Confirmation]='Yes'
+ End
+ */
+ 
+
+ if @originatingprocess in('Limit Provider Schedule Inprogress','Limit Provider Schedule')
+ BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Limit Schedule] from [Limit_Provider_Schedule]
+	--Union
+	--select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Limit Schedule] from [dbo].[2_46_Limit Provider Schedule] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Limit Provider Schedule')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+	End
+	Begin 
+		Delete a from [Clinic_Calendar] a inner join [Limit_Provider_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Limit Provider Schedule' and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+	End
+
+	Begin 
+		Delete a from [Clinic_Calendar] a inner join [Limit_Provider_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]='Limit Provider Schedule' and b.[Created On]>a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+	End
+End
+/*
+ Begin 
+	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join 
+	(
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Limit Schedule] from [Limit_Provider_Schedule]
+	--Union
+	--select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Limit Schedule] from [dbo].[2_46_Limit Provider Schedule] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Limit Provider Schedule')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+		 
+
+	End
+
+	Begin 
+
+		Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Limit_Provider_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Limit Provider Schedule' and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+	End
+	
+	Begin 
+		Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Limit_Provider_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]='Limit Provider Schedule' and b.[Created On]>a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+	End
+	*/
+
+
+ if @originatingprocess in('Limit Room Only Schedule Inprogress','Limit Room Only Schedule')
+ BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Room Only Schedule Provider][Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Limit Schedule] from [Limit_Room_Only_Schedule]
+	--Union
+	--select Distinct [Room Only Schedule Provider][Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Limit Schedule] from [dbo].[2_64_Limit Room Only Schedule] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Limit Room Only Schedule')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+	End
+
+	Begin 
+
+		Delete a from [Clinic_Calendar] a inner join [Limit_Room_Only_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Room Only Schedule Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Limit Room Only Schedule' and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+
+	End
+
+	Begin 
+		Delete a from [Clinic_Calendar] a inner join [Limit_Room_Only_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Room Only Schedule Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]='Limit Room Only Schedule' and b.[Created On]>a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+	End
+END
+/*
+ Begin 
+	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join 
+	(
+	select Distinct [Room Only Schedule Provider][Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Limit Schedule] from [Limit_Room_Only_Schedule]
+	Union
+	select Distinct [Room Only Schedule Provider][Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Limit Schedule] from [dbo].[2_64_Limit Room Only Schedule] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Limit Room Only Schedule','Limit Room Only Schedule Inprogress')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+	End
+
+	Begin 
+
+		Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Limit_Room_Only_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Room Only Schedule Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Limit Room Only Schedule' and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+	End
+	
+	Begin 
+		Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Limit_Room_Only_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Room Only Schedule Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]='Limit Room Only Schedule' and b.[Created On]>a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+	End
+
+*/
+
+ if @originatingprocess in('Limit Clinic Schedule Inprogress','Limit Clinic Schedule')
+ BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Clinic Type],[Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Limit Schedule] from [Limit_Clinic_Schedule]
+	--Union
+	--select Distinct [Clinic Type],[Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Limit Schedule] from [dbo].[2_47_Limit Clinic Schedule] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Type]=b.[Clinic Type] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Limit Clinic Schedule')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+
+	End
+
+	Begin 
+
+		Delete a from [Clinic_Calendar] a inner join [Limit_Clinic_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Type]=b.[Clinic Type] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Limit Clinic Schedule' and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+	End
+
+	Begin 
+
+		Delete a from [Clinic_Calendar] a inner join [Limit_Clinic_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Type]=b.[Clinic Type] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]='Limit Clinic Schedule' and b.[Created On]>a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+	End
+END
+/*
+ Begin 
+	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join 
+	(
+	select Distinct [Clinic Type],[Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Limit Schedule] from [Limit_Clinic_Schedule]
+	--Union
+	--select Distinct [Clinic Type],[Clinic Specialty],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Limit Schedule] from [dbo].[2_47_Limit Clinic Schedule] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Clinic Type]=b.[Clinic Type] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Limit Provider Schedule')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+
+	End
+
+	Begin 
+
+		Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Limit_Clinic_Schedule] b on a.[Clinic Date]=b.[Clinic Date] 
+		and a.[Clinic Type]=b.[Clinic Type] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Limit Clinic Schedule' and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+		
+
+	End
+
+		Begin 
+
+		Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Limit_Clinic_Schedule] b on a.[Clinic Date]=b.[Clinic Date] 
+		and a.[Clinic Type]=b.[Clinic Type] and a.[Clinic Specialty]=b.[Clinic Specialty]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]='Limit Clinic Schedule' and b.[Created On]>a.[Created On]
+		--and b.[Confirm Limit Schedule]='Yes'
+
+	End
+
+*/
+
+/*
+if @originatingprocess in('Shorten Provider Clinic Inprogress','Shorten Provider Clinic')
+BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [Shorten_Provider_Clinic]
+	Union
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [dbo].[2_43_Shorten Provider Clinic]
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Shorten Provider Clinic','Shorten Provider Clinic Inprogress')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+	End
+
+	Begin 
+
+		Delete a from [Clinic_Calendar] a inner join [Shorten_Provider_Clinic] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Shorten Provider Clinic' and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+
+	End
+
+ Begin 
+	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join 
+	(
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [Shorten_Provider_Clinic]
+	Union
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [dbo].[2_43_Shorten Provider Clinic]
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Shorten Provider Clinic','Shorten Provider Clinic Inprogress')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+		 
+
+	End
+
+	Begin 
+
+		Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Shorten_Provider_Clinic] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Shorten Provider Clinic' and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+	End
+END
+*/
+
+if @originatingprocess in('Shorten Provider Clinic Inprogress')
+BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	--select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [Shorten_Provider_Clinic]
+	--Union
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel],[Clinic Start Time],[Clinic End Time] from [dbo].[2_43_Shorten Provider Clinic]
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		and cast(a.[Clinic Start Time] as time) = cast(b.[Clinic Start Time]  as time) 
+		and cast(a.[Clinic End Time]  as time) = cast(b.[Clinic End Time] as time) 
+		where a.[Originating Process] not in('Shorten Provider Clinic Inprogress')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+	End
+END
+
+
+if @originatingprocess in('Shorten Provider Clinic')
+BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel],[Clinic Start Time],[Clinic End Time] from [Shorten_Provider_Clinic]
+	--Union
+	--select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [dbo].[2_43_Shorten Provider Clinic]
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		and cast(a.[Clinic Start Time] as time) = cast(b.[Clinic Start Time]  as time) 
+		and cast(a.[Clinic End Time]  as time) = cast(b.[Clinic End Time] as time) 
+		where a.[Originating Process] not in('Shorten Provider Clinic')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+	End
+END
+ 
+	--Begin 
+
+	--	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Shorten_Provider_Clinic] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+	--	and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Shorten Provider Clinic' and b.[Created On]>=a.[Created On]
+	--	--and b.[Confirm Cancel]='Yes'
+	--End
+
+/*
+if @originatingprocess in('Shorten Room Only Clinic Inprogress','Shorten Room Only Clinic')
+BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Room Only Schedule Provider][Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [Shorten_Room_Only_Schedule]
+	Union
+	select Distinct [Room Only Schedule Provider][Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [dbo].[2_63_Shorten Room Only Schedule]
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Shorten Room Only Clinic','Shorten Room Only Clinic Inprogress')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+		 
+
+	End
+
+	Begin 
+
+		Delete a from [Clinic_Calendar] a inner join [Shorten_Room_Only_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Room Only Schedule Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Shorten Room Only Clinic' and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+
+	End
+
+ Begin 
+	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join 
+	(
+	select Distinct [Room Only Schedule Provider][Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [Shorten_Room_Only_Schedule]
+	Union
+	select Distinct [Room Only Schedule Provider][Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [dbo].[2_63_Shorten Room Only Schedule]
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Shorten Room Only Clinic','Shorten Room Only Clinic Inprogress')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+		 
+
+	End
+
+	Begin 
+
+		Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Shorten_Room_Only_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Room Only Schedule Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Shorten Room Only Clinic' and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+		
+
+	End
+END
+*/
+
+
+if @originatingprocess in('Shorten Room Only Clinic Inprogress')
+BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	--select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [Shorten_Room_Only_Schedule]
+	--Union
+	select Distinct [Room Only Schedule Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [dbo].[2_63_Shorten Room Only Schedule]
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Room Only Schedule Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Shorten Room Only Clinic Inprogress')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+	End
+END
+
+
+if @originatingprocess in('Shorten Room Only Clinic')
+BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Room Only Schedule Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [Shorten_Room_Only_Schedule]
+	--Union
+	--select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Confirm Cancel] from [dbo].[2_63_Shorten Room Only Schedule]
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Room Only Schedule Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Shorten Room Only Clinic')
+		and b.[Created On]>=a.[Created On]
+		--and b.[Confirm Cancel]='Yes'
+	End
+End
+ 
+--	Begin 
+
+--		Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Shorten_Room_Only_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Room Only Schedule Provider]
+--		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Shorten Room Only Clinic' and b.[Created On]>=a.[Created On]
+--		--and b.[Confirm Cancel]='Yes'
+--	End
+--END
+
+if @originatingprocess in('Edit Provider Clinic Inprogress','Edit Provider Clinic')
+BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID] from [Edit_Provider_Clinic_Specialty]
+	--Union
+	--select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID] from [dbo].[2_44_Edit Provider Clinic Specialty]
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Edit Provider Clinic')
+		and b.[Created On]>=a.[Created On]
+	End
+
+	Begin 
+
+		Delete a from [Clinic_Calendar] a inner join [Edit_Provider_Clinic_Specialty] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Edit Provider Clinic' and b.[Created On]>=a.[Created On]
+	End
+END
+/*
+ Begin 
+	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join 
+	(
+	select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID] from [Edit_Provider_Clinic_Specialty]
+	--Union
+	--select Distinct [Provider],[Clinic Date],[Created On],[Kezava Unique ID] from [dbo].[2_44_Edit Provider Clinic Specialty]
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in('Edit Provider Clinic')
+		and b.[Created On]>=a.[Created On]
+	End
+	Begin 
+		Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Edit_Provider_Clinic_Specialty] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Edit Provider Clinic' and b.[Created On]>=a.[Created On]
+	End
+
+*/
+
+ if @originatingprocess in('Cancel Room Only Schedule Inprogress','Cancel Room Only Schedule')
+ BEGIN
+ Begin 
+	Delete a from [Clinic_Calendar] a inner join 
+	(
+	select Distinct [Room Only Schedule Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [Cancel_Room_Only_Schedule]
+	--Union
+	--select Distinct [Room Only Schedule Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [dbo].[2_57_Cancel Room Only Schedule] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Room Only Schedule Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in ('Cancel Room Only Schedule')
+		and b.[Created On]>=a.[Created On]
+	End
+
+	Begin 
+		Delete a from [Clinic_Calendar] a inner join [Cancel_Room_Only_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Room Only Schedule Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Cancel Room Only Schedule' and b.[Created On]>=a.[Created On]
+		
+	End
+	END
+End
+/*
+ Begin 
+	Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join 
+	(
+	select Distinct [Room Only Schedule Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [Cancel_Room_Only_Schedule]
+	--Union
+	--select Distinct [Room Only Schedule Provider],[Clinic Date],[Created On],[Kezava Unique ID],[Cancel Confirmation] from [dbo].[2_57_Cancel Room Only Schedule] 
+	)b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Room Only Schedule Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] 
+		where a.[Originating Process] not in ('Cancel Room Only Schedule')
+		and b.[Created On]>=a.[Created On]
+ End
+
+ Begin 
+		Delete a from [dbo].[ERD_Enterprise_Schedule_Data] a inner join [Cancel_Room_Only_Schedule] b on a.[Clinic Date]=b.[Clinic Date] and a.[Provider]=b.[Room Only Schedule Provider]
+		and a.[Kezava Unique ID]=b.[Kezava Unique ID] where a.[Originating Process]!='Cancel Room Only Schedule' and b.[Created On]>=a.[Created On]
+		
+ End
+ */
+

@@ -1,0 +1,18 @@
+1.USP_Create_Room_Only_Regular_Schedule_Grid
+2.Create_Room_Only_Regular_Schedule_Detail
+3.USP_Insert_Room_Assignment_Detail_Management
+4.Exec USP_Create_Provider_Regular_Schedule_Grid
+5.Create_Clinic_Regular_Schedule_Detail
+6.USP_Create_Clinic_Regular_Schedule_Grid
+7.USP_Create_Provider_Room_Hold_Schedule_Grid	
+8.Create_Provider_Room_Hold_Schedule_Detail	
+9.USP_Insert_Clinic_Calendar
+10.USP_Room_Occupancy_Details_Inputvalues
+11.Create_Provider_Regular_Schedule_Detail
+
+PRS
+1.Create_Provider_Regular_Schedule_Detail (Complete stage)
+2.USP_Insert_Room_Assignment_Detail_Management (Create,approve,room ops and confirm stage)
+3.USP_Create_Provider_Regular_Schedule_Grid(confirm stage)
+4.USP_Room_Occupancy_Details_Inputvalues (Create,approve,room ops and confirm stage)
+5.USP_Insert_Clinic_Calendar (confirm stage)

@@ -1,0 +1,14 @@
+For Transfer Rooms Regular Schedule and Transfer Schedule calendar we need to include 20% alert and hard Block
+
+1.is it needed to add 20% in transfer schedule calendar?
+2.whether we need to add Hard Block to the room transfer process if it so then that is not mentioned in description
+3.Current system we need to retain atleaset one room for week or date (we are taking RAD as base for this and do the operation).if we done transfer out all rooms then those schedule or date should not comes in transfer process
+  a.If we done transfer out and forget to update transfer in for this case how to handle this situation
+    ex.1.Rooms Required need to updated based on room release
+       2.Grid/schedule showing the empty room for that clinic
+
+
+
+
+
+

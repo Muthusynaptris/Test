@@ -1,0 +1,1234 @@
+USE [V3_Plastics]
+GO
+/****** Object:  StoredProcedure [dbo].[USP_Room_Finder_Button]    Script Date: 1/21/2023 4:13:47 AM ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+
+ALTER PROCEDURE [dbo].[USP_Room_Finder_Button] 
+( 
+@ipstartdate date,
+@ipendate date ,
+@input nvarchar(max)
+)
+as 
+--declare @intial int
+--declare @cnt int
+--declare @cnt1 int
+--declare @val nvarchar(150)
+set @input= replace(@input,':;','$') ;
+
+--set @intial=1
+--set @val=''
+Begin
+
+declare @DatabaseName nvarchar(150)
+set @DatabaseName=(select db_name())
+
+begin try
+
+Exec [V3_ERD]..[Log_ProcedureCall]  'USP_Room_Finder_Button',@DatabaseName, 'Start of Room Finder','','New'
+
+SET NOCOUNT ON
+	 --*****************************************************
+	 --The below block drop the table if already Table find
+	 --*****************************************************
+		if OBJECT_ID ('[dbo].[Room_Occupancy_data]') is not null
+		begin 
+			delete from [dbo].[Room_Occupancy_data]
+		end;
+
+	
+	 --*********************************************
+	 --The below block Truncate data from the table
+	 --*********************************************
+		if OBJECT_ID ('[dbo].Room_Finder_Schedule_dataset') is not null
+		begin 
+			delete from [dbo].[Room_Finder_Schedule_dataset]
+		end;
+
+		
+		
+
+		if OBJECT_ID ('[tempdb].[dbo].#Room_Occupancy_Final_data') is not null
+		begin 
+		    drop table #Room_Occupancy_Final_data;
+		end;
+
+		if OBJECT_ID ('[dbo].#tempRegular_Schedule_Room_Finder_data') is not null
+		begin 
+		    drop table #tempRegular_Schedule_Room_Finder_data;
+		end;
+
+		
+		if OBJECT_ID ('[dbo].Room_Input_data_RF') is not null
+		begin 
+		delete from [dbo].Room_Input_data_RF
+		--delete from [dbo].Room_Input_data_RF
+		end;
+
+		
+		
+
+		if OBJECT_ID ('#ClinicHour') is not null
+		begin 
+		delete from [dbo].#ClinicHour
+		end;
+
+		SELECT  [Clinic Hours Category]
+      ,[Start Time Minimum Value]
+      ,[Start Time Maximum Value]
+      ,[End Time Minimum Value]
+      ,[End Time Maximum Value]
+   into #ClinicHour FROM [ERD_Clinic_Hours_Category]
+
+
+	 --*****************************************************
+	 --The below block Create Table insert into input values
+	 --*****************************************************
+			if OBJECT_ID ('[dbo].Room_Input_data_RF') is null
+			begin
+				CREATE TABLE [dbo].[Room_Input_data_RF](
+				Grprno int,
+				[1] [nvarchar](max) NULL,
+				[2] Datetime NULL,--[nvarchar](max) NULL,
+				[3] Datetime NULL,--[nvarchar](max) NULL,
+				[4] [nvarchar](max) NULL,
+				[5] [nvarchar](max) NULL,
+				[6] [nvarchar](max) NULL,
+				[7] [nvarchar](max) NULL,
+				[8] [nvarchar](max) NULL,
+				[9] [nvarchar](max) NULL,
+				[10] [nvarchar](max) NULL,
+				[11] [nvarchar](max) NULL,
+				[12] [nvarchar](max) NULL,
+
+
+
+						
+				) ON [PRIMARY] 
+			end
+			delete from [dbo].[Room_Input_data_RF];
+	 --****************************************************************
+	 --The below block used to store the value CTE into Temporary Table
+	 --****************************************************************
+
+	 begin 
+			with 
+			cte as
+			(
+			select Grprno,g.splitdata splitdata1,ROW_NUMBER() over(partition by SP.Grprno order by SP.Grprno) Columngrp from (
+			selecT ROW_NUMBER() over(order by splitdata) Grprno,splitdata from fnSplitString(
+			@input,'|#|') where splitdata!='#'
+			)SP cross apply( select * from fnSplitString(splitdata,'$')) g
+			)
+	 		insert into [dbo].Room_Input_data_RF
+			seleCt Grprno,[1],[2],[3],[4],[5],[6],[7],(select top 1 [Division Name] from Division_Detail)[8],[9],[10],[11],[12] from cte PIVOT(max(splitdata1)	FOR columngrp IN ([1],[2],[3],[4],[5],[6],[7],[8],[9],[10],[11],[12])) AS SchoolPivot
+		
+	end 
+
+	if object_id('[tempdb].[dbo].#assignedrooms1') is not null
+		begin
+		drop table #assignedrooms1
+		end
+		
+		select x.[Clinic Date],x.[Schedule Start Date],x.[Schedule End Date],
+		x.provider,x.[Clinic Type], x. [Clinic Specialty],x.[Location],x.[Room Number],
+		cast(x.[Clinic Start Time] as time)[Clinic Start Time],cast(x.[Clinic end Time] as time)[Clinic end Time],x.[Clinic Duration],
+		x.[Clinic Hours Category],'Occupied'[Room Status],x.[Work Days],x.[Clinic Schedule Week],x.[Building],x.[Floor],x.[Division Name],0 [Total Hours],x.[Room Name],
+		null [Color Code] into  #assignedrooms1 from
+		[Room_Assignment_Detail] x with(nolock) inner join [dbo].[ERD_Room_Master] rm with(nolock) on x.[Room Number]=rm.[Room Number] 
+		inner join   [dbo].[ERD_DEP_Report]  d with(nolock) on d.Location=rm.Location and d.Building=rm.Building and d.Floor=rm.Floor and d.Suite=rm.Suite
+		inner join Room_Input_data_RF r with(nolock) on x.[Clinic Schedule Week]=r.[5] and x.[Work Days]=r.[4] and d.[Department Name]=r.[12]
+		where [Clinic Date] between  @ipstartdate and @ipendate
+	if OBJECT_ID ('[dbo].[Regular_Schedule_Room_Finder_data]') is not null
+		begin 
+		--select  (select top 1 [7] [Req Provider] from Room_Input_data_RF)  REQp;
+		if 
+		(select top 1 [11]  from Room_Input_data_RF)='Provider'
+		begin
+		delete from [dbo].[Regular_Schedule_Room_Finder_data] where [req provider]=(select top 1 [7] [Req Provider] from Room_Input_data_RF)
+		and isnull([req provider],'')!=''
+		end 
+		if (select top 1 [11]  from Room_Input_data_RF)='clinic'
+		begin
+
+		delete from [dbo].[Regular_Schedule_Room_Finder_data] where [req clinic specialty]=(select top 1 [10] [Req Provider] from Room_Input_data_RF)
+		and  [req clinic type]=(select top 1 [9] [Req Provider] from Room_Input_data_RF) and isnull([req provider],'')=''
+		end 
+		--delete from [dbo].Room_Input_data_RF
+		end;
+
+		if OBJECT_ID ('[dbo].[Room_Finder_Schedule_dataset_Rooms_Percentage]') is not null
+		begin 
+		 if (select top 1 [11]  from Room_Input_data_RF)='Provider'
+		
+		--begin
+		--delete from [dbo].[Room_Finder_Schedule_dataset_Rooms_Percentage_History] 
+		--where [request provider]=(select top 1 [7] [Req Provider] from Room_Input_data_RF)
+		--and isnull([request provider],'')!=''
+		--end
+		
+		
+		--begin
+		--insert into Room_Finder_Schedule_dataset_Rooms_Percentage_History
+		--select *  from [dbo].Room_Finder_Schedule_dataset_Rooms_Percentage where [request provider]=(select top 1 [7] [Req Provider] from Room_Input_data_RF)
+		--and isnull([request provider],'')!=''
+		--end
+		
+		begin
+
+			delete a from [dbo].[Room_Finder_Schedule_dataset_Rooms_Percentage] a with(nolock)
+			where [request provider]=(select top 1 [7] [Req Provider] from Room_Input_data_RF)
+		and isnull([request provider],'')!=''
+		end 
+
+
+		if (select top 1 [11]  from Room_Input_data_RF)='clinic'
+		
+		--begin
+		--delete from [dbo].[Room_Finder_Schedule_dataset_Rooms_Percentage_History] 
+		--where [request clinic specialty]=(select top 1 [10] [Req Provider] from Room_Input_data_RF)
+		--and  [request clinic type]=(select top 1 [9] [Req Provider] from Room_Input_data_RF) 
+		--and isnull([request provider],'')=''
+		--end
+		
+		--begin
+		--insert into Room_Finder_Schedule_dataset_Rooms_Percentage_History
+		--select * from Room_Finder_Schedule_dataset_Rooms_Percentage where [request clinic specialty]=(select top 1 [10] [Req Provider] from Room_Input_data_RF)
+		--and  [request clinic type]=(select top 1 [9] [Req Provider] from Room_Input_data_RF) and isnull([request provider],'')=''
+		--end
+		
+		begin
+		delete a from [dbo].[Room_Finder_Schedule_dataset_Rooms_Percentage] a with(nolock) 
+		where [request clinic specialty]=(select top 1 [10] [Req Provider] from Room_Input_data_RF)
+		and  [request clinic type]=(select top 1 [9] [Req Provider] from Room_Input_data_RF) and isnull([request provider],'')=''
+		end 	
+		
+
+		end;
+	begin
+	exec [V3_Room-Management].[dbo].[USP_Room__Occupancy_Calendar] @ipstartdate,@ipendate
+	end 
+
+
+		begin 
+		IF OBJECT_ID(N'tempdb..#baserooms') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #baserooms    
+	END  
+	IF OBJECT_ID(N'tempdb..#roomcalbase') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #roomcalbase    
+	END 
+	IF OBJECT_ID(N'tempdb..#roomcal') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #roomcal    
+	END 
+
+		Select * into #baserooms From (select  '' [clinic Date],a.[Provider],a.[Clinic Type],a.[Clinic Specialty],a.[Location],a.[Room Number]
+		,dateadd(day,1, cast(cast(a.[Clinic Start Time] as time) as datetime)) [Clinic Start Time]
+		,dateadd(day,1, cast(cast(a.[Clinic end Time] as time) as datetime)) [Clinic End Time],null [Clinic Duration],
+			
+		isnull
+		((select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		where (cast(b.[2] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		and cast([Start Time Maximum Value] as time)
+		and cast(b.[3] as time) BETWEEN cast([End Time Minimum Value] as time)
+		and cast([End Time Maximum Value] as time))),'All Day') [Clinic Hours Category],a.[Room Status],a.[Work Days],
+		a.[Clinic Schedule Week],a.[Building],a.[Floor],a.[Wing],a.[Total Hours]
+		,a.[Room Name],a.[Color Code]
+		,
+		--ROW_NUMBER()over(partition by a.[Work Days],	a.[Clinic Schedule Week],a.[room number] ,a.[Clinic Hours Category]
+		--order by a.[room number],a.[room status])   rno 
+		''rno
+		,
+		b.[2] [Req Start time] ,b.[3] [Req end time]
+		from [V3_Room-Management].[dbo].RoomFinderOccupanyData a
+		inner join Room_Input_data_RF b on a.[Clinic Schedule Week]=b.[5] and a.[Work Days]=b.[4]  
+		and a.[Location]=b.[1]
+		where isnull([clinic specialty],'')!='Room Setup Time'
+		and a.[Room Status]='Occupied'
+		--and 
+		--a.[Clinic Schedule Week]=(select [5] from Room_Input_data_RF )
+		--and a.[Work Days]=(select [4] from Room_Input_data_RF )
+		) as a
+	
+		Select * into #roomcalbase from 
+		( 
+		select  a.* from (
+		select  '' [clinic Date],a.[Provider],a.[Clinic Type],a.[Clinic Specialty],a.[Location],a.[Room Number]
+		,b.[2],b.[3]	,dateadd(day,1, cast(cast(a.[Clinic Start Time] as time) as datetime)) [Start Time]
+		,dateadd(day,1, cast(cast(a.[Clinic end Time] as time) as datetime)) [End Time]
+		,null [Clinic Duration],
+
+		isnull
+		((select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		where (cast(b.[2] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		and cast([Start Time Maximum Value] as time)
+		and cast(b.[3] as time) BETWEEN cast([End Time Minimum Value] as time)
+		and cast([End Time Maximum Value] as time))),'All Day')
+		[Clinic Hours Category],
+		--,(select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		--where (cast(b.[2] as time) BETWEEN cast([Start Time Minimum Value] as time) and cast([Start Time Maximum Value] as time)
+		--and cast(b.[3] as time) BETWEEN cast([End Time Minimum Value] as time) 
+		--and cast([End Time Maximum Value] as time))
+		--) crs
+		''crs
+		,a.[Room Status],a.[Work Days],
+		a.[Clinic Schedule Week],a.[Building],a.[Floor],a.[Wing],a.[Total Hours],a.[Room Name],a.[Color Code] ,
+		--ROW_NUMBER()over(partition by a.[Work Days],	a.[Clinic Schedule Week],a.[room number],isnull
+		--((select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		--where (cast(b.[2] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		--and cast([Start Time Maximum Value] as time)
+		--and cast(b.[3] as time) BETWEEN cast([End Time Minimum Value] as time)
+		--and cast([End Time Maximum Value] as time))),'All Day') order by a.[room number],a.[room status] ) rno 
+		'' rno
+		from [V3_Room-Management].[dbo].RoomFinderOccupanyData a  
+		inner join Room_Input_data_RF b on a.[Clinic Schedule Week]=b.[5] and a.[Work Days]=b.[4]  and a.Location=b.[1]
+
+
+		where 
+		(cast(b.[2] as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time] as time)
+		or   cast(b.[3] as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time] as time)
+		or cast(a.[Clinic Start Time]  as time) between  cast(b.[2] as time) and cast( b.[3]  as time)
+		or  cast(a.[Clinic End Time]  as time) between cast(b.[2] as time) and cast( b.[3]  as time) 
+		--			or 
+		--			(select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+		--where (cast(a.[Clinic Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+		--and cast([Start Time Maximum Value] as time)
+		--and cast(a.[Clinic End Time] as time) BETWEEN cast([End Time Minimum Value] as time)
+		-- and cast([End Time Maximum Value] as time)))='All Day'
+		)
+		and (cast(a.[Clinic End Time]  as time)!= cast(b.[2] as time) and  (cast(a.[Clinic Start Time]  as time)!= cast(b.[3] as time) ))
+
+
+		and  isnull(a.[clinic specialty],'')!='Room Setup Time'
+
+		) a 
+		) as a
+			
+
+		Select * into #roomcal from
+		( 
+		select  a.* from (
+		select '' [clinic Date],a.[Provider],a.[Clinic Type]
+		,a.[Clinic Specialty],a.[Location],a.[Room Number]
+		,a.[Start Time], a.[End Time],null [Clinic Duration],			
+		[Clinic Hours Category],a.[Room Status],a.[Work Days],
+		a.[Clinic Schedule Week],a.[Building],a.[Floor],a.[Wing],a.[Total Hours]
+		,a.[Room Name]
+		,a.[Color Code] 
+		from #roomcalbase a --where rno=1
+		) a ) as a
+
+		insert into [dbo].Room_Occupancy_data 
+		select * from #roomcal  a  
+		--where  [Room Number] 
+		--not in (select [Room Number] from baserooms b where  a.[Room Number]=b.[Room Number]
+		--	 and [a].[Clinic Schedule Week]=b.[Clinic Schedule Week] 
+		--	 and  a.[Work Days]=b.[Work Days]  and a.[Clinic Hours Category]=b.[Clinic Hours Category] )
+			union
+			select  a.[clinic Date],a.[Provider],a.[Clinic Type],a.[Clinic Specialty],a.[Location],a.[Room Number]
+			,a.[Clinic Start Time], a.[Clinic End Time],null [Clinic Duration],
+			
+			a.[Clinic Hours Category],a.[Room Status],a.[Work Days],
+			a.[Clinic Schedule Week],a.[Building],a.[Floor],a.[Wing],a.[Total Hours]
+			,a.[Room Name],a.[Color Code]  
+			from #baserooms a left join #roomcal b on a.[Room Number]=b.[Room Number]
+			 and [a].[Clinic Schedule Week]=b.[Clinic Schedule Week] 
+			 and  a.[Work Days]=b.[Work Days]  and a.[Clinic Hours Category]=b.[Clinic Hours Category]
+			 where 
+			 --a.rno=1
+			 -- -- and a.[Room Number]='MA1.404'
+			 --and 	
+			 		  ISNULL(b.[Room Number],'')='' 
+			--and a.[Clinic Schedule Week]=1 and a.[Work Days]='monday'
+			--and 	 ( (cast(a.[Clinic Start Time] as time)> cast(a.[Req Start time] as time)  and  cast(a.[Clinic end Time] as time)< cast(a.[Req end time] as time))
+			
+			--and cast(a.[Clinic Start Time]  as time)!=cast(a.[Req end time] as time))
+
+				--and  cast(a.[Req Start time] as  time) between cast([clinic start time] as time)and cast([clinic end time] as time)
+				
+		
+	
+
+		end
+
+		--update Room_Occupancy_data set [Room Status]='Unoccupied' where [Clinic Schedule Week]='2' and [Work Days]='Tuesday'and [Room Number]='Ex 63'
+ --***********************************************************************************
+	 --The below block used to store the value CTE into Temporary Table(using PIVOT Table)
+	 --***********************************************************************************
+		
+begin
+
+IF OBJECT_ID(N'tempdb..#Rodcntdata') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #Rodcntdata    
+	END 
+	
+	IF OBJECT_ID(N'tempdb..#Rodcntdatafinal') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #Rodcntdatafinal    
+	END
+
+	IF OBJECT_ID(N'tempdb..#Roomoccupancydata') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #Roomoccupancydata    
+	END  
+	IF OBJECT_ID(N'tempdb..#rocbasedata') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #rocbasedata    
+	END  
+
+
+
+
+
+		Select * into  #Rodcntdata from
+		(
+		select [Clinic Schedule Week],[Work Days],cast([Clinic Start Time] as time)[Clinic Start Time],
+		cast([Clinic End Time] as time)[Clinic End Time],[Clinic Hours Category],[Room Name],[Room Number]
+		,count(*)[Rod Occupied Count] from(
+		select  distinct [Clinic Date],[Clinic Schedule Week],[Work Days],
+		cast([Clinic Start Time] as time)[Clinic Start Time],
+		cast([Clinic End Time] as time)[Clinic End Time],[Clinic Hours Category]
+		,
+		[Room Name],[Room Number] from RoomFinderOccupanyData
+		where [Room Status]='Occupied' and  isnull(st,'')!='Room Setup'
+		--and  [schedule workflow status]!='Inprogress' 
+		and (((select top 1 [11]  from Room_Input_data_RF)='Provider' 
+		and isnull(provider,'')!=isnull((select top 1 isnull([7],'') [Req Provider] from Room_Input_data_RF),'') )
+		or ( ((select top 1 [11]  from Room_Input_data_RF)='Clinic' and 
+		isnull([clinic specialty],'')!=(select top 1 isnull([10],'') [Req Provider] from Room_Input_data_RF ))
+		--and isnull(provider,'')=''
+		--added on 28092022 to exculde req clinc spec and assigned provider clinic spec are same 
+		or ((select top 1 [11]  from Room_Input_data_RF)='Clinic' and  
+		isnull([clinic specialty],'')=(select top 1 isnull([10],'') [Req Provider] from Room_Input_data_RF ) and  isnull(provider,'')	!='')
+		)
+		) and 
+		(isnull(provider,'')!=(select top 1 'Division'+ ' - '+ [Division Name] from Division_Detail))
+
+
+		--and [Room Number]='LA3.133'  and [Clinic Schedule Week]=5 and [Work Days]='Saturday'
+		--and
+		--[Clinic Hours Category]!='All Day'
+		--union
+		--select  [Clinic Date],[Clinic Schedule Week],[Work Days],cast([Clinic Start Time] as time)[Clinic Start Time],
+		--cast([Clinic End Time] as time)[Clinic End Time],
+		--'AM'[Clinic Hours Category]
+		--,
+		--[Room Name],[Room Number] from RoomFinderOccupanyData
+		--where [Room Status]='Occupied' and  isnull(st,'')!='Room Setup'
+		--and (((select top 1 [11]  from Room_Input_data_RF)='Provider' 
+		--and isnull(provider,'')!=isnull((select top 1 isnull([7],'') [Req Provider] from Room_Input_data_RF),'') )
+		--or  ((select top 1 [11]  from Room_Input_data_RF)='Clinic' and 
+		--isnull([clinic specialty],'')!=(select top 1 [10] [Req Provider] from Room_Input_data_RF)
+		--)) and 
+		--[Clinic Hours Category]='All Day'
+		--union
+		--select  [Clinic Date],[Clinic Schedule Week],[Work Days],cast([Clinic Start Time] as time)[Clinic Start Time],
+		--cast([Clinic End Time] as time)[Clinic End Time],
+		--'PM'[Clinic Hours Category]
+		--,
+		--[Room Name],[Room Number] from RoomFinderOccupanyData
+		--where [Room Status]='Occupied' and  isnull(st,'')!='Room Setup'
+		--and (((select top 1 [11]  from Room_Input_data_RF)='Provider' and
+		--isnull(provider,'')!=isnull((select top 1 isnull([7],'') [Req Provider] from Room_Input_data_RF),'')) 
+		--or  ((select top 1 [11]  from Room_Input_data_RF)='Clinic' and 
+		--isnull([clinic specialty],'')!=(select top 1 [10] [Req Provider] from Room_Input_data_RF))
+		--) and 
+		--[Clinic Hours Category]='All Day'
+		--union
+		
+		--select  [Clinic Date],[Clinic Schedule Week],[Work Days],cast([Clinic Start Time] as time)[Clinic Start Time],
+		--cast([Clinic End Time] as time)[Clinic End Time],
+		--'Evening'[Clinic Hours Category]
+		--,
+		--[Room Name],[Room Number] from RoomFinderOccupanyData
+		--where [Room Status]='Occupied' and  isnull(st,'')!='Room Setup' 
+		--and (((select top 1 [11]  from Room_Input_data_RF)='Provider'
+		--and isnull(provider,'')!=isnull((select top 1 isnull([7],'') [Req Provider] from Room_Input_data_RF),'') )
+		--or  ((select top 1 [11]  from Room_Input_data_RF)='Clinic' and 
+		--isnull([clinic specialty],'')!=(select top 1 [10] [Req Provider] from Room_Input_data_RF)
+		--))
+		--and [Clinic Hours Category]='All Day'
+	
+	
+		)a	
+		group by [Clinic Schedule Week],[Work Days],[Room Name],[Room Number],cast([Clinic Start Time] as time),
+		cast([Clinic End Time] as time),[Clinic Hours Category]
+		) as a
+		
+		Select * into #Roomoccupancydata from
+		(
+		select  distinct [Clinic_Date][Clinic Date],[Clinic Schedule Week],[Work Days],
+		[Clinic Hours Category],
+		[Room Name],[Room Number],[Room Status] ,[start time] ,[end time] from Room_Occupancy_data
+		left join 
+			( 
+				SELECT datestring Clinic_Date 
+				FROM dbo.DateRange_To_Table (cast(@ipstartdate as datetime),cast(@ipendate as datetime))
+			) DT on 1 = 1 
+		where	CHARINDEX(cast(ceiling(cast(right(CONVERT(Date, DT.Clinic_Date, 103),2)
+				as float)/7.00)as nvarchar(10)),[Clinic Schedule Week])>0 
+		and		CHARINDEX(left(datename(weekday,CONVERT(Date, DT.Clinic_Date, 103)),3),
+				[Work Days])> 0 
+		and [Room Status]='Occupied'
+		) as a
+		
+		Select * into #rocbasedata from
+		(		 
+		select a.*,[Overlap Occupied Count] from Room_Occupancy_data a inner join (select * from( 
+		select [Clinic Schedule Week],[Work Days],[Clinic Hours Category],[Room Name],[Room Number]
+		,count(*)[Overlap Occupied Count] from(
+		select distinct [Clinic Date],[Clinic Schedule Week],[Work Days],[Clinic Hours Category],
+		[Room Name],[Room Number] ,[Start Time], [End Time] from #Roomoccupancydata
+		where [Room Status]='Occupied' 
+		)a	
+		group by [Clinic Schedule Week],[Work Days],[Clinic Hours Category],[Room Name],[Room Number],[Start Time], [End Time] 
+		)a)b
+		on a.[Clinic Schedule Week]=b.[Clinic Schedule Week]
+		and a.[Work Days]=b.[Work Days]
+		and a.[Room Number]=b.[Room Number]
+		and a.[Clinic Hours Category]  =b.[Clinic Hours Category]
+		
+		and a.[Room Status]='Occupied' 
+		union
+		select *,0.00 [Overlap Occupied Count] from Room_Occupancy_data where [Room Status]='Unoccupied'
+		) as a
+
+
+		select [Clinic Schedule Week],[Work Days],min([Clinic Start Time]) [Clinic Start Time] ,max([Clinic End Time]) [Clinic End Time]
+		,[Room Name],[Room Number],
+		[Clinic Hours Category_New],sum([Rod Occupied Count])[Rod Occupied Count] into #Rodcntdatafinal from
+		( 
+		select  distinct a.*,
+		--case when a.[Clinic Schedule Week]=b.[Clinic Schedule Week]
+		--and a.[Work Days]=b.[Work Days]
+		--and a.[Room Number]=b.[Room Number]
+		--and cast(a.[Clinic Start Time] as time)=cast(b.[Start Time] as time)
+		--and cast(a.[Clinic End Time] as time)=cast(b.[End Time] as time) 
+		--then b.[Clinic Hours Category] else a.[Clinic Hours Category] end as 
+	  null  [Clinic Hours Category_New] 
+	
+		from #Rodcntdata a left join #rocbasedata b
+		on a.[Clinic Schedule Week]=b.[Clinic Schedule Week]
+		and a.[Work Days]=b.[Work Days]
+		and a.[Room Number]=b.[Room Number]
+		--and cast(a.[Clinic Start Time] as time)=cast(b.[Start Time] as time)--and cast(a.[Clinic End Time] as time)=cast(b.[End Time] as time)--and  a.[Clinic Hours Category]=b.[Clinic Hours Category]
+
+		 where  
+		(cast(a.[Clinic Start Time] as time) between  cast(b.[Start Time] as time) and cast( b.[End Time] as time)
+		or   cast(a.[Clinic End Time] as time) between  cast(b.[Start Time] as time) and cast( b.[End Time] as time)
+		or cast(b.[Start Time]  as time) between  cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time]  as time)
+		or  cast(b.[End Time]  as time) between cast(a.[Clinic Start Time] as time) and cast( a.[Clinic End Time]  as time) 
+		)
+		and (cast(b.[End Time]  as time)!= cast(a.[Clinic Start Time] as time)
+		and  (cast(b.[Start Time]  as time)!= cast(a.[Clinic End Time] as time) ))
+
+
+		)a group by [Clinic Schedule Week],[Work Days],[Room Name],[Room Number],
+		[Clinic Hours Category_New]
+
+		select  a.*,
+		b.[Rod Occupied Count],case when a.[Overlap Occupied Count]=0 then 100 
+		else cast(round(((b.[Rod Occupied Count]/a.[Overlap Occupied Count])*100),2,0) as decimal(10,2))  end [Rooms Percentage]
+		into #Room_Occupancy_Final_data from #rocbasedata a left join #Rodcntdatafinal b 
+		on a.[Clinic Schedule Week]=b.[Clinic Schedule Week]
+		and a.[Work Days]=b.[Work Days]
+		and a.[Room Number]=b.[Room Number]
+		--and 
+		--(a.[Clinic Hours Category]=b.[Clinic Hours Category_New]   or  b.[Clinic Hours Category_New]='All day' 
+		--or  a.[Clinic Hours Category]='All day'
+		--) 
+		 
+
+		 and 
+		(cast(b.[Clinic Start Time] as time) between  cast(a.[Start Time] as time) and cast( a.[End Time] as time)
+		or   cast(b.[Clinic End Time] as time) between  cast(a.[Start Time] as time) and cast( a.[End Time] as time)
+		or cast(a.[Start Time]  as time) between  cast(b.[Clinic Start Time] as time) and cast( b.[Clinic End Time]  as time)
+		or  cast(a.[End Time]  as time) between cast(b.[Clinic Start Time] as time) and cast( b.[Clinic End Time]  as time) 
+		
+		)
+		and (cast(a.[End Time]  as time)!= cast(b.[Clinic Start Time] as time)
+		and  (cast(a.[Start Time]  as time)!= cast(b.[Clinic End Time] as time) ))
+		
+		---where a.[Room Number]='LA3.332'
+		-- cast(a.[Start Time] as time)=cast(b.[Clinic Start Time] as time)
+		--and cast(a.[End Time] as time)=cast(b.[Clinic End Time] as time)
+		--and a.[Room Status]='Occupied' 
+		
+		end 
+		
+
+		insert into [dbo].Room_Finder_Schedule_dataset
+			(
+			[Date],[Provider],[Clinic Type],[Clinic Specialty],[Location],[Room Number],[Available Start Time],[Available End Time],[Clinic Duration],
+			[Clinic Hours Category],[Room Status],[Day of Week],[Schedule Week No],[Building],[Floor],[Wing],[Total Hours],[Room Name],
+			[Color Code],[Roomcnt],[Request Provider],[Request Division],[Request Clinic Type],[Request Clinic Specialty],
+			[Schedule Category],[Rod Occupied Count],[Overlap Occupied Count],[Rooms Percentage])
+
+			selecT * from
+			(SELECT  '' [Date],[Provider],[Clinic Type],[Clinic Specialty],[Location],[Room Number]
+			,cast([Start Time] as time)[Available Start Time],cast([End Time] as time) [Available End Time],[Clinic Duration],
+			
+--			(select top 1 [Clinic Hours Category] from [dbo].#ClinicHour
+--where (cast([Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) and cast([Start Time Maximum Value] as time)
+--and cast([End Time] as time) BETWEEN cast([End Time Minimum Value] as time) and cast([End Time Maximum Value] as time)))
+			[Clinic Hours Category]
+			,[Room Status],[Work Days] [Day of Week]
+			,[Clinic Schedule Week] [Schedule Week No],[Building],[Floor],[Wing],[Total Hours],[Room Name],[Color Code] ,
+			(select count( [Room Name]) FROM [dbo].#Room_Occupancy_Final_data ROD where Location=ip.[1] 
+			) Roomcnt ,[7] [Req Provider],[8] [Req Division],--@Reqroomname [Req Room Name],
+			case when [11]='Provider' then '' else [9] end [Request Clinic Type],case when [11]='Provider' then '' else [10] end [Request Clinic Specialty]
+			,[11] [Schedule Category],[Rod Occupied Count],[Overlap Occupied Count],[Rooms Percentage]
+			FROM [dbo].#Room_Occupancy_Final_data RO inner join [dbo].[Room_Input_data_RF] ip
+
+			on ro.Location in (select  location from [dbo].[ERD_Dep_Report] where [Department Name]=ip.[12])
+			and ro.[Work Days]=ip.[4] and [Clinic Schedule Week]=ip.[5] 
+			)x
+
+	begin
+			insert into [Room_Finder_Schedule_dataset_Rooms_Percentage] 
+			(
+			[Date],[Provider],[Clinic Type],[Clinic Specialty],[Location],[Room Number],[Available Start Time],[Available End Time],[Clinic Duration],
+			[Clinic Hours Category],[Room Status],[Day of Week],[Schedule Week No],[Building],[Floor],[Wing],[Total Hours],[Room Name],
+			[Color Code],[Roomcnt],[Request Provider],[Request Division],[Request Clinic Type],[Request Clinic Specialty],
+			[Schedule Category],[Rod Occupied Count],[Overlap Occupied Count],[Rooms Percentage] )
+			select 
+			x.[Clinic Date],
+		 x.provider,   x.[Clinic Type], x. [Clinic Specialty],x.[Location],x.[Room Number],
+		 x.[Clinic Start Time][Available Start Time], x.[Clinic end Time] [Available End Time],x.[Clinic Duration],
+			x.[Clinic Hours Category],'Occupied'[Room Status],[Day of Week],[Schedule Week No],x.[Building],x.[Floor],x.[Division Name],0 [Total Hours],x.[Room Name],
+			null [Color Code],[Roomcnt],[Request Provider],[Request Division],[Request Clinic Type],[Request Clinic Specialty],
+			[Schedule Category],[Rod Occupied Count],[Overlap Occupied Count],[Rooms Percentage] 
+		from Room_Finder_Schedule_dataset y 
+		inner join (select * from [#assignedrooms1] where [Clinic Date] between @ipstartdate and @ipendate) x on 
+			 x.[Clinic Schedule Week]=y.[Schedule Week No] and x.[Work Days]=y.[Day of Week] and 
+			(cast(y.[Available Start Time] as time) between  cast(x.[Clinic Start Time] as time) and cast( x.[Clinic End Time] as time)
+		or   cast(y.[Available End Time] as time) between  cast(x.[Clinic Start Time] as time) and cast( x.[Clinic End Time] as time)
+		or cast(x.[Clinic Start Time]  as time) between  cast(y.[Available Start Time] as time) and cast( y.[Available End Time]  as time)
+		or  cast(x.[Clinic End Time]  as time) between cast(y.[Available Start Time] as time) and cast( y.[Available End Time]  as time) 
+		
+		)
+		and (cast(x.[Clinic End Time]  as time)!= cast(y.[Available Start Time] as time)
+		and  (cast(x.[Clinic Start Time]  as time)!= cast(y.[Available End Time] as time) ))  
+			--and (isnull(x.Provider,'')!=(select top 1 isnull([7],'') [Req Provider] from Room_Input_data_RF)
+		--	or (x.[clinic specialty]=(select top 1 [10] [Req Provider] from Room_Input_data_RF)
+		--and  x.[clinic type]=(select top 1 [9] [Req Provider] from Room_Input_data_RF) 
+		--and isnull(x.[provider],'')=''))
+			and x.[Room Number]=y.[Room Number]
+			where isnull(x.[Provider],'')!=(select concat('Division Hold - ',[Division Name]) from [division_detail])
+			--and isnull(y.[Rooms Percentage],0)<=20 and isnull(y.[Rooms Percentage],0)>0 
+
+			and (((select top 1 [11]  from Room_Input_data_RF)='Provider' 
+		and isnull(x.provider,'')!=isnull((select top 1 isnull([7],'') [Req Provider] from Room_Input_data_RF),'') )
+		or ( ((select top 1 [11]  from Room_Input_data_RF)='Clinic' and 
+		isnull(x.[clinic specialty],'')!=(select top 1 isnull([10],'') [Req Provider] from Room_Input_data_RF ))
+		--and isnull(provider,'')=''
+		--added on 28092022 to exculde req clinc spec and assigned provider clinic spec are same 
+		or ((select top 1 [11]  from Room_Input_data_RF)='Clinic' and  
+		isnull(x.[clinic specialty],'')=(select top 1 isnull([10],'') [Req Provider] from Room_Input_data_RF ) and  isnull(x.provider,'')	!='')
+		)
+		)
+
+		and 
+		(isnull(x.provider,'')!=(select top 1 'Division'+ ' - '+ [Division Name] from Division_Detail))
+			end 
+
+		--	begin
+		--		update a set a.[Clinic Specialty]=b.[Clinic Specialty],a.[Clinic Type]=b.[Clinic Type] from Room_Finder_Schedule_dataset_Rooms_Percentage a
+		--		inner join Room_Finder_Schedule_dataset_Rooms_Percentage_History b 
+		--		on a.[Request Clinic Specialty]=b.[Request Clinic Specialty] and a.[Schedule Week No]=b.[Schedule Week No] and a.[Day of Week]=b.[Day of Week]
+		--		and a.[Room Number]=b.[Room Number] and a.[Available Start Time]=b.[Available Start Time] and a.[Available End Time]=b.[Available End Time]
+		--		and a.[Room Status]=b.[Room Status]
+		--		where a.[Room Status]='Occupied' and b.[Room Status]='Occupied'
+		--		and isnull(a.[Rooms Percentage],'')>0 and isnull(a.[Rooms Percentage],'')<=20
+		--		and isnull(b.[Rooms Percentage],'')>0 and isnull(b.[Rooms Percentage],'')<=20
+		--		and isnull(a.[Request Provider],'')=''
+		--		and isnull(b.[Request Provider],'')=''
+		--		and a.[request clinic specialty]=(select top 1 [10] [Req Provider] from Room_Input_data_RF)
+		--		and  a.[request clinic type]=(select top 1 [9] [Req Provider] from Room_Input_data_RF) and isnull(a.[request provider],'')=''
+		--  end
+
+		--begin
+		--	update a set a.[Provider]=b.[Provider] from Room_Finder_Schedule_dataset_Rooms_Percentage a inner join Room_Finder_Schedule_dataset_Rooms_Percentage_History b 
+		--	on a.[Request Provider]=b.[Request Provider] and a.[Schedule Week No]=b.[Schedule Week No] and a.[Day of Week]=b.[Day of Week]
+		--	and a.[Room Number]=b.[Room Number] and a.[Available Start Time]=b.[Available Start Time] and a.[Available End Time]=b.[Available End Time]
+		--	and a.[Room Status]=b.[Room Status]
+		--	where a.[Room Status]='Occupied' and b.[Room Status]='Occupied'
+		--	and isnull(a.[Rooms Percentage],'')>0 and isnull(a.[Rooms Percentage],'')<=20
+		--	and isnull(b.[Rooms Percentage],'')>0 and isnull(b.[Rooms Percentage],'')<=20
+		--	and isnull(a.[Request Clinic Specialty],'')=''
+		--	and isnull(b.[Request Clinic Specialty],'')=''
+		--	and isnull(a.[request provider],'')=(select top 1 [7] [Req Provider] from Room_Input_data_RF)
+		--	and isnull(a.[request provider],'')!=''
+		--end
+begin
+	
+	--if OBJECT_ID ('[dbo].Room_Finder_Schedule_dataset_Final') is not null
+	--	begin 
+	--		delete from [dbo].[Room_Finder_Schedule_dataset_Final]
+	--	end;
+	begin	
+
+		IF OBJECT_ID(N'tempdb..#Requesttime') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #Requesttime   
+	END  
+	IF OBJECT_ID(N'tempdb..#Occupieddataset') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #Occupieddataset    
+	END 
+	IF OBJECT_ID(N'tempdb..#Dataset') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #Dataset    
+	END 
+
+	IF OBJECT_ID(N'tempdb..#FinalDataset') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #FinalDataset    
+	END 
+	IF OBJECT_ID(N'tempdb..#roomfinderdata') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #roomfinderdata    
+	END 
+	IF OBJECT_ID(N'tempdb..#finaldata') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #finaldata    
+	END 
+	IF OBJECT_ID(N'tempdb..#finaldata1') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #finaldata1    
+	END 
+	
+
+	IF OBJECT_ID(N'tempdb..#finalresultdataset') IS NOT NULL    
+	BEGIN    
+	DROP TABLE #finalresultdataset   
+	END 
+
+		Select * into #Requesttime from
+		(
+		select [1] Location,cast([2] as time) [Request Start Time],cast([3] as time) [Request End Time],[4] [Work Days],[5][Clinic Schedule Week],[Clinic Hours Category],
+		case when [clinic hours category] in('AM','All Day')
+		then [3]
+		else 
+		dateadd(MINUTE,
+		(SELECT case when round(cast(a.[Clinic Duration] as float)/RST.[Clinic Duration]*[Setup Duration],2,0)<[Max Room Setup Time] then round(cast(a.[Clinic Duration] as float)/RST.[Clinic Duration]*[Setup Duration],2,0) else 
+		[Max Room Setup Time] end [Room Setup time Hours]
+		FROM [dbo].[ERD_Room_Setup_Time] RST)*-1,cast([2] as time)) end [Room Setup Start Time],
+
+		case when [clinic hours category] in ('AM','All Day')
+		then dateadd(MINUTE,
+		(SELECT case when round(cast(a.[Clinic Duration] as float)/RST.[Clinic Duration]*[Setup Duration],2,0)<[Max Room Setup Time] then round(cast(a.[Clinic Duration] as float)/RST.[Clinic Duration]*[Setup Duration],2,0) else 
+		[Max Room Setup Time] end [Room Setup time Hours]
+			 
+		FROM [dbo].[ERD_Room_Setup_Time] RST),cast([3] as time))
+		else 
+		[2] end [Room Setup End Time],(SELECT case when round(cast(a.[Clinic Duration] as float)/RST.[Clinic Duration]*[Setup Duration],2,0)<[Max Room Setup Time] then round(cast(a.[Clinic Duration] as float)/RST.[Clinic Duration]*[Setup Duration],2,0) else 
+		[Max Room Setup Time] end [Room Setup time Hours]
+		FROM [dbo].[ERD_Room_Setup_Time] RST) [Room Setup Hours] ,[request provider], [request division],--[request room name],
+		[Request Clinic Type], 
+		[Request Clinic Specialty],[Schedule Category]
+		from (
+		select  *,
+		--case when cast([3] as time)>cast('12:30:00.0000000' as time) then 'PM' else 'AM' end as [Clinic Hours Category],
+		(select top 1 [Clinic Hours Category] from [dbo].[ERD_Clinic_Hours_Category]
+		where (cast([2] as time) BETWEEN cast([Start Time Minimum Value] as time) and cast([Start Time Maximum Value] as time)
+		and cast([3] as time) BETWEEN cast([End Time Minimum Value] as time) and cast([End Time Maximum Value] as time)))[Clinic Hours Category],
+		(datediff(minute,[2],[3]))/60 [Clinic Duration], [7][request provider], [8] [request division],--[9] [Request Room Name],
+		[9] [Request Clinic Type],[10] [Request Clinic Specialty],
+		[11] [Schedule Category] from [dbo].[Room_Input_data_RF] where isnull([2],'')!='' and isnull([3],'')!=''
+		)a
+		) as a
+
+-- Room_Finder_Schedule_dataset as (
+--	selecT * from
+--			(SELECT  '' [Date],[Provider],[Clinic Type],[Clinic Specialty],[Location],[Room Number]
+--			,cast([Start Time] as time)[Available Start Time],cast([End Time] as time) [Available End Time],[Clinic Duration],
+			
+--			(select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+--where (cast([Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) and cast([Start Time Maximum Value] as time)
+--and cast([End Time] as time) BETWEEN cast([End Time Minimum Value] as time) and cast([End Time Maximum Value] as time)))
+--			[Clinic Hours Category]
+--			,[Room Status],[Work Days] [Day of Week]
+--			,[Clinic Schedule Week] [Schedule Week No],[Building],[Floor],[Wing],[Total Hours],[Room Name],[Color Code] ,
+--			(select count( [Room Name]) FROM [dbo].Room_Occupancy_data ROD where Location=ip.[1] 
+--			) Roomcnt ,[7] [Req Provider],[8] [Req Division],--@Reqroomname [Req Room Name],
+--			case when [11]='Provider' then '' else [9] end [Request Clinic Type],case when [11]='Provider' then '' else [10] end [Request Clinic Specialty]
+--			,[11] [Schedule Category]
+--			FROM [dbo].Room_Occupancy_data RO inner join [dbo].[Room_Input_data_RF] ip
+
+--			on ro.Location in (select  location from [dbo].[ERD_Dep_Report] where [Department Name]=ip.[12])
+--			and ro.[Work Days]=ip.[4] and [Clinic Schedule Week]=ip.[5] 
+--			)x),
+
+
+	Select * into #Occupieddataset from
+	(
+	select a.*,case when [clinic hours category] in('AM','All Day')
+	then [Assign End Time]
+	else 
+	dateadd(MINUTE,
+	(SELECT case when round(cast(a.[Clinic Duration] as float)/RST.[Clinic Duration]*[Setup Duration],2,0)<[Max Room Setup Time] then round(cast(a.[Clinic Duration] as float)/RST.[Clinic Duration]*[Setup Duration],2,0) else 
+	[Max Room Setup Time] end [Room Setup time Hours]
+	FROM [dbo].[ERD_Room_Setup_Time] RST)*-1,[Assign Start Time]) end [Room Setup Start Time],
+
+	case when [clinic hours category] in('AM','All Day')
+	then dateadd(MINUTE,
+	(SELECT case when round(cast(a.[Clinic Duration] as float)/RST.[Clinic Duration]*[Setup Duration],2,0)<[Max Room Setup Time] then round(cast(a.[Clinic Duration] as float)/RST.[Clinic Duration]*[Setup Duration],2,0) else 
+	[Max Room Setup Time] end [Room Setup time Hours]
+	FROM [dbo].[ERD_Room_Setup_Time] RST),[Assign End Time])
+	else 
+	[Assign Start Time] end [Room Setup End Time],(SELECT case when round(cast(a.[Clinic Duration] as float)/RST.[Clinic Duration]*[Setup Duration],2,0)<[Max Room Setup Time] then round(cast(a.[Clinic Duration] as float)/RST.[Clinic Duration]*[Setup Duration],2,0) else 
+	[Max Room Setup Time] end [Room Setup time Hours]
+	FROM [dbo].[ERD_Room_Setup_Time] RST) [Room Setup Hours] from 
+	(
+	select * from (
+	select  b.[Date],b.[Provider],b.[Clinic Type],b.[Clinic Specialty],b.[Location],b.[Room Number],b.[Available Start Time][Assign Start Time],b.[Available End Time][Assign End Time],b.[Clinic Duration],
+	--(select top 1 [Clinic Hours Category] from [dbo].#ClinicHour
+	--where (cast(b.[Available Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) and cast([Start Time Maximum Value] as time)
+	--and cast(b.[Available End Time] as time) BETWEEN cast([End Time Minimum Value] as time) and cast([End Time Maximum Value] as time))) 
+	[Clinic Hours Category]
+	,
+	b.[Room Status],b.[Day of Week],b.[Schedule Week No],b.[Building],b.[Floor],b.[Wing],b.[Total Hours],b.[Room Name],b.[Color Code],b.[Roomcnt] ,
+	b.[Rod Occupied Count],b.[Overlap Occupied Count],b.[Rooms Percentage]
+	from [dbo].Room_Finder_Schedule_dataset b ) a
+
+	where isnull([Clinic Specialty],'')!='Room Setup Time'
+	)a
+
+	) as a
+ --select * from Occupieddataset
+ 
+Select * into #Dataset from
+(
+select  
+
+[Date],[Schedule Category],[Provider],[Request Provider],[Clinic Type],[Clinic Specialty],
+[Request Clinic Type],[Request Clinic Specialty],a.[Location],[Room Number],[Assign Start Time],
+[Assign End Time],[Clinic Duration],a.[Clinic Hours Category],
+case when [Schedule Category]='Provider' and isnull(a.Provider,'')=isnull(b.[request provider],'') then 'Preselected' 
+ when [Schedule Category]='Clinic' and (isnull(a.[Clinic Type],'')=isnull(b.[Request Clinic Type],'') 
+ and isnull(a.[Clinic Specialty],'')=isnull(b.[Request Clinic Specialty],'') and isnull(a.Provider,'')='')
+ --and isnull(a.Provider,'')!=''
+ then 'Preselected' 
+ else
+  [Room Status] end
+   [Room Status],[Day of Week],[Schedule Week No],
+[Building],[Floor],[Wing],[Total Hours],[Room Name],[Color Code],[Roomcnt],[Request Start Time],[Request End Time],
+b.[Room Setup Start Time][Req Room Setup Start Time],b.[Room Setup End Time][Req Room Setup End Time],
+a.[Room Setup Start Time][Assign Room Setup Start Time],a.[Room Setup End Time][Assign Room Setup End Time],
+[Rod Occupied Count],[Overlap Occupied Count],[Rooms Percentage]
+from #Occupieddataset a 
+left join #Requesttime b 
+on a.[Location]=b.Location 
+and a.[Schedule Week No]=b.[Clinic Schedule Week]
+and a.[Day of Week]=b.[Work Days] and 
+
+(cast(b.[Request Start Time] as time) between  cast(a.[Assign Start Time] as time) and cast( a.[Assign End Time] as time)
+			or   cast(b.[Request End Time] as time) between  cast(a.[Assign Start Time] as time) and cast( a.[Assign End Time] as time)
+			or cast(a.[Assign Start Time]  as time) between  cast(b.[Request Start Time] as time) and cast( b.[Request End Time]  as time)
+			or  cast(a.[Assign End Time]  as time) between cast(b.[Request Start Time] as time) and cast( b.[Request End Time]  as time) 
+			or 
+			(select top 1 [Clinic Hours Category] from [dbo].ERD_Clinic_Hours_Category
+where (cast(a.[Assign Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) 
+and cast([Start Time Maximum Value] as time)
+and cast(a.[Assign End Time] as time) BETWEEN cast([End Time Minimum Value] as time)
+ and cast([End Time Maximum Value] as time)))='All Day'
+ )
+			and (cast(a.[Assign End Time]  as time)!= cast(b.[Request Start Time] as time) and  (cast(a.[Assign Start Time]  as time)!= cast(b.[Request End Time] as time) ))
+and a.[Clinic Hours Category]=b.[Clinic Hours Category]
+and isnull([Request Start Time],'')!=''
+	--where 
+	--cast(b.[Request Start Time] as time) between  cast(a.[Assign Start Time] as time) and cast( a.[Assign End Time] as time)
+	--		and  cast(b.[Request End Time] as time) between  cast(a.[Assign Start Time] as time) and cast( a.[Assign End Time] as time)
+
+--	--		and 
+--			((select top 1 [Clinic Hours Category] from [dbo].#ClinicHour
+--where (cast(a.[Assign Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) and cast([Start Time Maximum Value] as time)
+--and cast(a.[Assign End Time] as time) BETWEEN cast([End Time Minimum Value] as time) and cast([End Time Maximum Value] as time)))=(select top 1 [Clinic Hours Category] from [dbo].#ClinicHour
+--where (cast(b.[Request Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) and cast([Start Time Maximum Value] as time)
+--and cast(b.[Request End Time] as time) BETWEEN cast([End Time Minimum Value] as time) and cast([End Time Maximum Value] as time))) or (select top 1 [Clinic Hours Category] from [dbo].#ClinicHour
+--where (cast(a.[Assign Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) and cast([Start Time Maximum Value] as time)
+--and cast(a.[Assign End Time] as time) BETWEEN cast([End Time Minimum Value] as time) and cast([End Time Maximum Value] as time)))='All Day'
+--or 
+--isnull((select top 1 [Clinic Hours Category] from [dbo].#ClinicHour
+--where (cast(a.[Assign Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) and cast([Start Time Maximum Value] as time)
+--and cast(a.[Assign End Time] as time) BETWEEN cast([End Time Minimum Value] as time) and cast([End Time Maximum Value] as time))),'')='')
+
+) as a
+--select * from dataset
+Select * into #FinalDataset from
+(
+select *,case when [Schedule Category]='Provider' and isnull(Provider,'')=isnull([request provider],'') then 'Green'
+when [Schedule Category]='Clinic' and (isnull([Clinic Type],'')=isnull([Request Clinic Type],'') and isnull([Clinic Specialty],'')=isnull([Request Clinic Specialty],'') and isnull(Provider,'')='') then 'White'
+when [Schedule Category]='Provider' and [Room Status] in('Occupied','Blocked') and ((cast([Request Start Time] as time) between cast([Assign Start Time] as time) and cast([Assign End Time] as time))
+or (cast([Request End Time] as time) between cast([Assign Start Time] as time) and cast([Assign End Time] as time))) then 'Light Red'
+when [Schedule Category]='Clinic' and [Room Status] in('Occupied','Blocked') and ((cast([Request Start Time] as time) between cast([Assign Start Time] as time) and cast([Assign End Time] as time))
+or (cast([Request End Time] as time) between cast([Assign Start Time] as time) and cast([Assign End Time] as time))) then 'Light Red'
+ when [Schedule Category]='Provider' and [Room Status] in('Occupied','Blocked') and ((cast ([Req Room Setup Start Time] as time) between cast([Assign Room Setup Start Time] as time) and cast([Assign Room Setup End Time] as time))
+or (cast([Req Room Setup End Time] as time) between cast([Assign Room Setup Start Time] as time) and cast([Assign Room Setup End Time] as time))) then 'Light Green'
+ when [Schedule Category]='Clinic' and [Room Status] in('Occupied','Blocked') and ((cast ([Req Room Setup Start Time] as time) between cast([Assign Room Setup Start Time] as time) and cast([Assign Room Setup End Time] as time))
+or (cast([Req Room Setup End Time] as time) between cast([Assign Room Setup Start Time] as time) and cast([Assign Room Setup End Time] as time))) then 'Light Green'
+else 'White' end as [Room Finder Color Code]
+from #Dataset
+) as a
+--select * from FinalDataset
+
+---Joning with Room Master to get additional columns for ERF------------
+Select * into #roomfinderdata from (
+select x.*,null [Room Category],null [Sink Available],null [Procedure Allowed],null [Suite]
+,
+null [Characteristics] ,null [Room Name Characteristics] 
+ from 
+(select @ipstartdate [Schedule Start Date], @ipendate [Schedule End Date],[Provider],[Clinic Type],[Clinic Specialty]
+,[Location],[Room Number],[Assign Start Time],[Assign End Time],[Request Start Time],[Request End Time],
+ [Assign Room Setup Start Time],[Assign Room Setup End Time],[Req Room Setup Start Time],[Req Room Setup End Time],[Clinic Duration],[Clinic Hours Category],
+ --case when [Room Finder Color Code]='white' then 'Unoccupied'else [Room Status] end as 
+ case when (isnull([Rooms Percentage],0)>0 and isnull([Rooms Percentage],0)<=20) and [Room Status]='Occupied' then 'Unoccupied' else  [Room Status] end [Room Status] ,
+ [Day of Week][Work Days],[Schedule Week No][Clinic Schedule Week],[Building],[Floor],
+ 
+[Wing] ,[Total Hours],[Room Name],
+ [Color Code],[Roomcnt],[Room Finder Color Code],[Rod Occupied Count],[Overlap Occupied Count],[Rooms Percentage],[rowno] ,null [MDC Clinic Specialty],null [Room only schedule provider] from (
+select *,
+--ROW_NUMBER()over(partition by [Day Of Week],[Schedule Week No],[Room number],[Clinic Hours Category] order by [Room Name]
+--,[Assign Start Time],[Room Status])rowno 
+''rowno
+from #FinalDataset)a
+--where rowno=1 
+)x 
+
+where --isnull(x.[Clinic Hours Category],'')!='' 
+
+--order by [Location],[Clinic Schedule Week],[Work Days],[Room Name]
+--and 
+x.Location in (select  location from [dbo].[ERD_Dep_Report] where [Department Name]in (selecT  [12] from [dbo].Room_Input_data_RF)) 
+--)
+--select * from roomfinderdata
+union
+
+
+
+
+select x.*,x1.[Room Category],x1.[Sink Available],x1.[Procedure Allowed],x1.[Suite] ,
+
+isnull(x1.[Room Category],'') [Characteristics] ,ISNULL(x.[Room Name],'')+'>>'+isnull(x1.[Room Category],'') [Room Name Characteristics] from 
+(select [Schedule Start Date], [Schedule End Date],[Provider],[Clinic Type],[Clinic Specialty],[Location],[Room Number]
+,[Clinic Start Time],[Clinic End Time], [Clinic Start Time] [Request Start Time], [Clinic End Time][Request End Time],
+ [Clinic Start Time] [Assign Room Setup Start Time],[Clinic end Time] [Assign Room Setup End Time]
+ , [Clinic Start Time] [Req Room Setup Start Time],[Clinic end Time] [Req Room Setup End Time],[Clinic Duration],[Clinic Hours Category],
+ 'Preselected' [Room Status] ,
+ [Work Days],[Clinic Schedule Week],[Building],[Floor],
+ 
+ [Wing],0 [Total Hours], [Room Name1] [Room Name],
+ null [Color Code],1 [Roomcnt],'Green' [Room Finder Color Code],''[Rod Occupied Count],''[Overlap Occupied Count],''
+  [Rooms Percentage],[rowno],[MDC Clinic Specialty] ,[Room only schedule provider] from (
+select s.splitdata [Room Name1],*  from 
+(
+select x.*,
+--ROW_NUMBER()over(partition by x.[work days],x.[Clinic Schedule Week],x.[Clinic Hours Category],x.[Room Number] order by x.[Room Name])
+--rowno
+''rowno
+ from Regular_Provider_Schedule_Roomfind  x
+ inner join  Regular_Provider_Schedule_Roomfind_exit y on 
+ x.[work days]=y.[work days] and x.[Clinic Schedule Week]=y.[Clinic Schedule Week]
+  and cast(x.[Clinic Start Time] as time)=cast(y.[Clinic Start Time] as time)
+ and cast( x.[Clinic End Time] as time)=cast(y.[Clinic End Time]  as time) and x.[room number]=y.[room number]
+  where isnull(x.[Room Number],'')!=''
+)r
+cross apply (select * from [dbo].[fnSplitString]([Room Number],';')) s
+where ISNULL([Room Name],'')!='' and ISNULL([Room Number],'')!='' )t
+ )x left join 
+dbo.ERD_Room_Master x1
+on  x.[Room Name]=x1.[Room Number]
+where (provider in (select [7] from [dbo].Room_Input_data_RF) 
+or [Room Only Schedule Provider]in (select [7] from [dbo].Room_Input_data_RF))
+and isnull([Clinic Hours Category],'')!=''
+and (select top	1 [11] from [dbo].Room_Input_data_RF)='Provider'
+and x.[Location] in (select [1] from [dbo].Room_Input_data_RF)
+and isnull(x.[MDC Clinic Specialty],'')=''
+
+union
+
+
+
+
+select x.*,x1.[Room Category],x1.[Sink Available],x1.[Procedure Allowed],x1.[Suite] ,
+
+isnull(x1.[Room Category],'') [Characteristics] ,ISNULL(x.[Room Name],'')+'>>'+isnull(x1.[Room Category],'') [Room Name Characteristics] 
+from 
+(select [Schedule Start Date], [Schedule End Date],[Provider],[Clinic Type],[Clinic Specialty],[Location],[Room Number]
+,[Clinic Start Time],[Clinic End Time], [Clinic Start Time] [Request Start Time], [Clinic End Time][Request End Time],
+ [Clinic Start Time] [Assign Room Setup Start Time],[Clinic end Time] [Assign Room Setup End Time]
+ , [Clinic Start Time] [Req Room Setup Start Time],[Clinic end Time] [Req Room Setup End Time],[Clinic Duration],[Clinic Hours Category],
+ 'Preselected' [Room Status] ,
+ [Work Days],[Clinic Schedule Week],[Building],[Floor], [Wing],0 [Total Hours], [Room Name1] [Room Name],
+ null [Color Code],1 [Roomcnt],'Green' [Room Finder Color Code],''[Rod Occupied Count],''[Overlap Occupied Count],'' [Rooms Percentage],[rowno] ,[MDC Clinic Specialty],[Room only schedule provider] from (
+select s.splitdata [Room Name1],*  from 
+(
+select x.*,
+--ROW_NUMBER()over(partition by x.[Day of the Week],x.[Clinic Schedule Week],x.[Clinic Hours Category],x.[Room Number] order by x.[Room Name])
+--rowno
+''rowno
+from Regular_Provider_Schedule_Roomfind  x
+ inner join  Regular_Provider_Schedule_Roomfind_exit y on 
+ x.[work days]=y.[work days] and x.[Clinic Schedule Week]=y.[Clinic Schedule Week]
+  and cast(x.[Clinic Start Time] as time)=cast(y.[Clinic Start Time] as time)
+ and cast( x.[Clinic End Time] as time)=cast(y.[Clinic End Time]  as time) and x.[room number]=y.[room number]
+  where isnull(x.[Room Number],'')!=''
+)r
+cross apply (select * from [dbo].[fnSplitString]([Room Number],';')) s )t
+ )x left join 
+dbo.ERD_Room_Master x1
+on x.[Room name] =x1.[room name]  and x.[Room Number]=x1.[Room Number]
+where [clinic type] in (select [9] from [dbo].Room_Input_data_RF)
+and [Clinic Specialty] in (select [10] from [dbo].Room_Input_data_RF)
+and x.[Location] in (select [1] from [dbo].Room_Input_data_RF)
+
+and isnull([Clinic Hours Category],'')!=''
+and (select top	1 [11] from [dbo].Room_Input_data_RF)='Clinic'
+ and isnull(provider,'')='' and isnull(x.[MDC Clinic Specialty],'')=''
+ /*
+ union
+
+ 
+select x.*,x1.[Room Category],x1.[Sink Available],x1.[Procedure Allowed],x1.[Suite] ,
+
+isnull(x1.[Room Category],'') [Characteristics] ,ISNULL(x.[Room Name],'')+'>>'+isnull(x1.[Room Category],'') [Room Name Characteristics] 
+from 
+(select [Schedule Start Date], [Schedule End Date],[Provider],[Clinic Type],[Clinic Specialty],[Location],[Room Number]
+,[Clinic Start Time],[Clinic End Time], [Clinic Start Time] [Request Start Time], [Clinic End Time][Request End Time],
+ [Clinic Start Time] [Assign Room Setup Start Time],[Clinic end Time] [Assign Room Setup End Time]
+ , [Clinic Start Time] [Req Room Setup Start Time],[Clinic end Time] [Req Room Setup End Time],[Clinic Duration],[Clinic Hours Category],
+ 'Preselected' [Room Status] ,
+ [Work Days],[Clinic Schedule Week],[Building],[Floor], [Wing],0 [Total Hours], [Room Name1] [Room Name],
+ null [Color Code],1 [Roomcnt],'Green' [Room Finder Color Code],''[Rod Occupied Count],''[Overlap Occupied Count],'' [Rooms Percentage],[rowno],[MDC Clinic Specialty] ,[Room only schedule provider] from (
+select s.splitdata [Room Name1],*  from 
+(
+select x.*,ROW_NUMBER()over(partition by x.[Day of the Week],x.[Clinic Schedule Week],x.[Clinic Hours Category],x.[Room Number] order by x.[Room Name])rowno
+ from Regular_Provider_Schedule_Roomfind x inner join  Regular_Provider_Schedule_Roomfind_exit y on 
+ x.[Day of the Week]=y.[Day of the Week] and x.[Clinic Schedule Week]=y.[Clinic Schedule Week] and x.[Clinic Start Time]=y.[Clinic Start Time]
+ and x.[Clinic End Time]=y.[Clinic End Time] and x.[room number]=y.[room number]
+  where isnull(x.[Room Number],'')!=''
+)r
+cross apply (select * from [dbo].[fnSplitString]([Room Number],';')) s )t
+ )x left join 
+dbo.ERD_Room_Master x1
+on x.[Room name] =x1.[room name]
+where [clinic type] in (select [9] from [dbo].Room_Input_data_RF)
+and [Clinic Specialty] in (select [10] from [dbo].Room_Input_data_RF)
+and x.[Location] in (select [1] from [dbo].Room_Input_data_RF)
+
+and isnull([Clinic Hours Category],'')!=''
+and (select top	1 [11] from [dbo].Room_Input_data_RF)='Clinic'
+and provider in (select isnull([7],'') from [dbo].Room_Input_data_RF)
+and isnull(x.[MDC Clinic Specialty],'')!=''
+ */
+ 
+
+ ) as a
+ --select * from roomfinderdata
+
+ if object_id('tempdb.dbo.#roomfinderdatafinal')is not null
+ begin
+ drop table #roomfinderdatafinal
+ end
+
+ select * into #roomfinderdatafinal from #roomfinderdata h
+ cross apply (select * from [dbo].[fnSplitString](isnull(h.[room number],';'),';')) z
+
+ alter table #roomfinderdatafinal alter column splitdata nvarchar(450)
+ 
+ IF  EXISTS (SELECT * FROM sys.indexes WHERE NAME = N'ix_roomfinderdatafinal_splitdata') 
+ begin
+ DROP INDEX ix_roomfinderdatafinal_splitdata ON #roomfinderdatafinal
+ end
+
+ create nonclustered index id_roomfinderdatafinal_splitdata on #roomfinderdatafinal(splitdata)
+
+Select * into #finaldata from(
+ select 
+ 
+ (select top 1  min([Schedule Start Date]) from [dbo].[#assignedrooms1] x
+ where x.[room number]= h.splitdata and x.[Clinic Schedule Week]=h.[Clinic Schedule Week] and x.[Work Days]=h.[Work Days]
+ and cast(x.[clinic start time] as time)= cast(h.[Assign Start Time] as time)
+ and cast(x.[clinic end time] as time)= cast(h.[Assign end Time] as time)
+ and x.[clinic date]>=cast(getdate() as  date)
+
+ )[Schedule Start Date],(select top 1  max([Schedule end Date]) from [dbo].[#assignedrooms1] x
+ where x.[room number]= h.splitdata and x.[Clinic Schedule Week]=h.[Clinic Schedule Week] and x.[Work Days]=h.[Work Days]
+ and cast(x.[clinic start time] as time)= cast(h.[Assign Start Time] as time)
+ and cast(x.[clinic end time] as time)= cast(h.[Assign end Time] as time)
+ and x.[clinic date]>=cast(getdate() as date)
+
+ )	[Schedule End Date],	h.[Provider],	h.[Clinic Type],	h.[Clinic Specialty],	r.[Location],	
+ r.[Room Number],	h.[Assign Start Time],	
+ h.[Assign End Time],	h.[Request Start Time],	h.[Request End Time],	h.[Assign Room Setup Start Time],	h.[Assign Room Setup End Time],	
+ h.[Req Room Setup Start Time],	
+ h.[Req Room Setup End Time],	h.[Clinic Duration],	isnull(h.[Clinic Hours Category],'All Day') [Clinic Hours Category],	h.[Room Status],
+ 	h.[Work Days],	h.[Clinic Schedule Week],	r.[Building],	r.[Floor],	
+r.[Wing],	h.[Total Hours],	r.[Room Name],	
+case when h.[room status]='Occupied' and h.[Total Hours]>4 then '#FFE9E8'
+when h.[room status]='Occupied' and h.[Total Hours]<=4 then '#F8F76E' else h.[Color Code] end [Color Code] ,	h.[Roomcnt],
+	case when h.[room status]='Occupied' and h.[Total Hours]>4 then 'Light Red'
+when h.[room status]='Occupied' and h.[Total Hours]<=4 then 'Yellow'
+when h.[room status]='Unoccupied' then 'White' 
+when h.[room status]='Preselected' then 'Green' else h.[Room Finder Color Code] end [Room Finder Color Code],[Rod Occupied Count],[Overlap Occupied Count],[Rooms Percentage],	h.[rowno],	h.[MDC Clinic Specialty],	h.[Room only schedule provider],
+ 	h.[Room Category],	h.[Sink Available],	h.[Procedure Allowed],	r.[Suite],	isnull(r.[Room Category],'') [Characteristics] ,ISNULL(r.[Room Name],'')+'>>'+isnull(r.[Room Category],'') [Room Name Characteristics] 
+ --,
+ --ROW_NUMBER()over(partition by h.[Work Days],	h.[Clinic Schedule Week],r.[room number] ,[Clinic Hours Category] order by r.[room number],h.[room status],h.[Assign Start Time]) rowno1
+ ,
+h.[Room Number] orroomno,
+case when h.[Room Status]='Preselected'then '1' when h.[Room Status]='Occupied'then '2'
+when h.[room status]='Unoccupied' then '3' else '4' end as orderno from #roomfinderdatafinal h
+ --cross apply (select * from [dbo].[fnSplitString](isnull(h.[room number],';'),';')) z
+ inner join dbo.ERD_Room_Master r on  h.splitdata=r.[Room Number] 
+ and r.Location=h.Location
+	and isnull(r.[Room Number],'')!=''
+	) as a --and rowno=1
+
+
+	Select * into #finaldata1 from ( Select [Schedule Start Date],[Schedule End Date],[Provider],[Clinic Type],[Clinic Specialty],[Location],	
+ [Room Number],[Assign Start Time],	
+ [Assign End Time],[Request Start Time],[Request End Time],[Assign Room Setup Start Time],[Assign Room Setup End Time],	
+ [Req Room Setup Start Time],	
+ [Req Room Setup End Time],[Clinic Duration],[Clinic Hours Category],[Room Status],
+ 	[Work Days],[Clinic Schedule Week],[Building],[Floor],	
+[Wing],[Total Hours],[Room Name],[Color Code] ,[Roomcnt],
+	[Room Finder Color Code],[Rod Occupied Count],[Overlap Occupied Count],[Rooms Percentage],	[rowno],[MDC Clinic Specialty],[Room only schedule provider],
+ 	[Room Category],[Sink Available],[Procedure Allowed],[Suite],[Characteristics] , [Room Name Characteristics] 
+ 
+
+,ROW_NUMBER()over(partition by [Work Days],	[Clinic Schedule Week],[room number] ,[Clinic Hours Category]
+  order by [room number],orderno,[Assign Start Time]) rowno1,orroomno from #finaldata) as a
+
+	Select * into #finalresultdataset from
+	(
+	select * ,(select top 1 [7] [Req Provider] from Room_Input_data_RF)  [Req Provider]
+	,(select top 1 [9]  from Room_Input_data_RF) [Req Clinic Type]
+	,(select top 1 [10]  from Room_Input_data_RF) [Req Clinic Specialty],'' [Room Selected]
+	 from #finaldata1 --where rowno1=1
+
+
+	) as a
+
+
+  
+-- where (select top 1 [Clinic Hours Category] from [V3_ERD].[dbo].Clinic_Hours_Category
+--where (cast([Request Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) and cast([Start Time Maximum Value] as time)
+--and cast([Request End Time] as time) BETWEEN cast([End Time Minimum Value] as time) and cast([End Time Maximum Value] as time)))=
+--(select top 1 [Clinic Hours Category] from [V3_ERD].[dbo].Clinic_Hours_Category
+--where (cast([Assign Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) and cast([Start Time Maximum Value] as time)
+--and cast([Assign End Time] as time) BETWEEN cast([End Time Minimum Value] as time) and cast([End Time Maximum Value] as time)))  ;
+--select * into [Regular_Schedule_Room_Finder_data]   from  finalresultdataset ;
+
+select * into #tempRegular_Schedule_Room_Finder_data
+   from  #finalresultdataset 
+where rowno1=1 --and [Room Number] not in(select [Room Number] from [ERD_Room_Master] where isnull([Room Status],'')='Inactive');
+
+insert into [Regular_Schedule_Room_Finder_data]
+select distinct [Schedule Start Date],[Schedule End Date],[Provider],[Clinic Type],[Clinic Specialty],[Location],[Room Number],[Assign Start Time],
+[Assign End Time],[Request Start Time],[Request End Time],[Assign Room Setup Start Time],[Assign Room Setup End Time],[Req Room Setup Start Time],
+[Req Room Setup End Time],[Clinic Duration],[Clinic Hours Category],[Room Status],[Work Days],[Clinic Schedule Week],[Building],[Floor],[Wing],
+[Total Hours],[Room Name],case when [Room Status] in('Occupied') and [Total Hours]>4 then '#FFE9E8'
+when [Room Status] in('Occupied') and [Total Hours]<=4 then '#F8F76E' else [Color Code] end [Color Code],[Roomcnt],case when [Room Status]='Occupied' 
+and [Total Hours]>4 then 'Light Red'
+when [Room Status] in('Occupied') and [Total Hours]<=4 then 'Yellow'
+when [Room Status]='Unoccupied' then 'White' 
+when [Room Status]='Preselected' then 'Green' else [Room Finder Color Code] end as [Room Finder Color Code],[Rod Occupied Count],[Overlap Occupied Count],[Rooms Percentage],[rowno],
+[MDC Clinic Specialty],[Room only schedule provider],[Room Category],[Sink Available],[Procedure Allowed],[Suite],[Characteristics],
+[Room Name Characteristics],[rowno1],[orroomno],[Req Provider],[Req Clinic Type],[Req Clinic Specialty],[Room Selected] from 
+(
+select  [Schedule Start Date],[Schedule End Date],[Provider],[Clinic Type],[Clinic Specialty],[Location],[Room Number],[Assign Start Time],
+[Assign End Time],[Request Start Time],[Request End Time],[Assign Room Setup Start Time],[Assign Room Setup End Time],[Req Room Setup Start Time],
+[Req Room Setup End Time],[Clinic Duration],[Clinic Hours Category],
+case when cast([Assign End Time] as time)>cast(b.[2] as time)
+and [Room Status]='Unoccupied' and (isnull([Provider],'')!='' or isnull([Clinic Specialty],'')!='') and isnull([Rooms Percentage],0)>20 then 'Occupied' else [Room Status] end as [Room Status],
+[Work Days],[Clinic Schedule Week],[Building],[Floor],[Wing],
+[Total Hours],[Room Name],[Color Code],[Roomcnt],[Room Finder Color Code],[Rod Occupied Count],[Overlap Occupied Count],[Rooms Percentage],[rowno],
+[MDC Clinic Specialty],[Room only schedule provider],[Room Category],[Sink Available],[Procedure Allowed],[Suite],[Characteristics],
+[Room Name Characteristics],[rowno1],[orroomno],[Req Provider],[Req Clinic Type],[Req Clinic Specialty],[Room Selected]
+from #tempRegular_Schedule_Room_Finder_data a inner join Room_Input_data_RF b with(nolock) 
+on a.[Clinic Schedule Week]=b.[5] and a.[Work Days]=b.[4] and a.[Location]=b.[1]
+)a 
+
+
+select distinct [Schedule Start Date],[Schedule End Date],[Provider],[Clinic Type],[Clinic Specialty],[Location],[Room Number],[Assign Start Time],
+[Assign End Time],[Request Start Time],[Request End Time],[Assign Room Setup Start Time],[Assign Room Setup End Time],[Req Room Setup Start Time],
+[Req Room Setup End Time],[Clinic Duration],[Clinic Hours Category],[Room Status],[Work Days],[Clinic Schedule Week],[Building],[Floor],[Wing],
+[Total Hours],[Room Name],case when [Room Status] in('Occupied') and [Total Hours]>4 then '#FFE9E8'
+when [Room Status] in('Occupied') and [Total Hours]<=4 then '#F8F76E' else [Color Code] end [Color Code],[Roomcnt],case when [Room Status]='Occupied' 
+and [Total Hours]>4 then 'Light Red'
+when [Room Status] in('Occupied') and [Total Hours]<=4 then 'Yellow'
+when [Room Status]='Unoccupied' then 'White' 
+when [Room Status]='Preselected' then 'Green' else [Room Finder Color Code] end as [Room Finder Color Code],[Rod Occupied Count],[Overlap Occupied Count],[Rooms Percentage],[rowno],
+[MDC Clinic Specialty],[Room only schedule provider],[Room Category],[Sink Available],[Procedure Allowed],[Suite],[Characteristics],
+[Room Name Characteristics],[rowno1],[orroomno],[Req Provider],[Req Clinic Type],[Req Clinic Specialty],[Room Selected] from 
+(
+select  [Schedule Start Date],[Schedule End Date],[Provider],[Clinic Type],[Clinic Specialty],[Location],[Room Number],[Assign Start Time],
+[Assign End Time],[Request Start Time],[Request End Time],[Assign Room Setup Start Time],[Assign Room Setup End Time],[Req Room Setup Start Time],
+[Req Room Setup End Time],[Clinic Duration],[Clinic Hours Category],--[Room Status],
+case when cast([Assign End Time] as time)>cast(b.[2] as time)
+and [Room Status]='Unoccupied' and (isnull([Provider],'')!='' or isnull([Clinic Specialty],'')!='') and isnull([Rooms Percentage],0)>20 then 'Occupied' else [Room Status] end as [Room Status],
+[Work Days],[Clinic Schedule Week],[Building],[Floor],[Wing],
+[Total Hours],[Room Name],[Color Code],[Roomcnt],[Room Finder Color Code],[Rod Occupied Count],[Overlap Occupied Count],[Rooms Percentage],[rowno],
+[MDC Clinic Specialty],[Room only schedule provider],[Room Category],[Sink Available],[Procedure Allowed],[Suite],[Characteristics],
+[Room Name Characteristics],[rowno1],[orroomno],[Req Provider],[Req Clinic Type],[Req Clinic Specialty],[Room Selected]
+from #tempRegular_Schedule_Room_Finder_data a inner join Room_Input_data_RF b with(nolock) 
+on a.[Clinic Schedule Week]=b.[5] and a.[Work Days]=b.[4] and a.[Location]=b.[1]
+where rowno1=1
+)a
+order by Location,Building,Floor,suite,[Room Name]
+
+	/*
+	-- and cast([Request Start Time] as time) between cast([Assign Start Time] as time) and cast([Assign End Time] as time)
+	--or(cast([Request End Time] as time) between cast([Assign Start Time] as time) and cast([Assign End Time] as time))
+	select * from finalresultdataset where [Room Status]='Unoccupied'  and  [rowno1]=1
+	
+	union All
+	select [Schedule Start Date],[Schedule End Date],[Provider],[Clinic Type],[Clinic Specialty],[Location],[Room Number],
+	[Assign Start Time],[Assign End Time],[Request Start Time],[Request End Time],[Assign Room Setup Start Time],[Assign Room Setup End Time],
+	[Req Room Setup Start Time],[Req Room Setup End Time],[Clinic Duration],[Clinic Hours Category],[Room Status],[Work Days],
+	[Clinic Schedule Week],[Building],[Floor],[Wing],[Total Hours],[Room Name],[Color Code],[Roomcnt],[Room Finder Color Code],[Rod Occupied Count],[Overlap Occupied Count],[Rooms Percentage],[rowno],
+	[MDC Clinic Specialty],[Room only schedule provider],[Room Category],[Sink Available],[Procedure Allowed],[Suite],[Characteristics],
+	[Room Name Characteristics],[rowno1],[orroomno] from (
+	select  *,case when( [Request Start Time] between [Assign Start Time] and [Assign end Time] or  [Request end Time]  between [Assign Start Time] and [Assign end Time]) then 'yes' 
+	else 'No'
+	end as [Catflag]	
+	from (
+	select [Schedule Start Date],[Schedule End Date],[Provider],[Clinic Type],[Clinic Specialty],[Location],[Room Number],[Assign Start Time],[Assign End Time],[Request Start Time],
+	[Request End Time],[Assign Room Setup Start Time],[Assign Room Setup End Time],[Req Room Setup Start Time],[Req Room Setup End Time],[Clinic Duration],
+	(select top 1 [Clinic Hours Category] from [dbo].[ERD_Clinic_Hours_Category]
+	where (cast(a.[Assign Start Time] as time) BETWEEN cast([Start Time Minimum Value] as time) and cast([Start Time Maximum Value] as time)
+	and cast(a.[Assign End Time] as time) BETWEEN cast([End Time Minimum Value] as time) and cast([End Time Maximum Value] as time)))[Assigned Clinic Hours Category],
+	[Clinic Hours Category],[Room Status],[Work Days],[Clinic Schedule Week],[Building],[Floor],[Wing],[Total Hours],[Room Name],[Color Code],[Roomcnt],
+	[Room Finder Color Code],[Rod Occupied Count],[Overlap Occupied Count],[Rooms Percentage],[rowno],[MDC Clinic Specialty],[Room only schedule provider],[Room Category],[Sink Available],[Procedure Allowed],[Suite],
+	[Characteristics],[Room Name Characteristics],[rowno1],[orroomno] from (
+	select *,row_number() over(partition by [Work Days],[Clinic Schedule Week],[room number],
+	cast([Assign Start Time] as time),cast([Assign End Time] as time) order by [room number],[Clinic Hours Category])rowid from finalresultdataset where [Room Status] in ('Occupied','Preselected')
+	)a where [rowno1]=1 and [Rooms Percentage]<=20
+	)b
+	)c
+	--where c.[Clinic Hours Category]=c.[Assigned Clinic Hours Category]
+	 --where [Catflag]='Yes'
+	 order by location,Building,floor,[Room Name],[rowno1]
+	 */
+
+Exec [V3_ERD]..[Log_ProcedureCall]  'USP_Room_Finder_Button',@DatabaseName, 'End of Room Finder','','New'
+
+
+ end 
+ end
+  end try
+	begin catch
+	EXEC USP_Report_Error;
+	end catch
+ 
+ End
+
+
